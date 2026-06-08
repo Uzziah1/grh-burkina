@@ -252,7 +252,6 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
         <div className="card">
           <div className="card-header">
             <h3>Historique des contrats</h3>
-            <button className="btn btn-primary btn-sm" onClick={() => addContrat()}>+ Ajouter</button>
           </div>
           <table>
             <thead>
@@ -311,7 +310,7 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
             </div>
           </div>
           <div className="card">
-            <div className="card-header"><h3>Historique des congés</h3></div>
+            <div className="card-header"><h3>Historique des contrats</h3></div>
             <table>
               <thead>
                 <tr><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th></tr>
