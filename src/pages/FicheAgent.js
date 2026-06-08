@@ -22,7 +22,10 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('info');
 
-  useEffect(() => { loadAgent(); }, [agentId]);
+  useEffect(() => {
+  if (agentId) loadAgent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [agentId]);
 
   async function loadAgent() {
     setLoading(true);

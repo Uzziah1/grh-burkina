@@ -3,7 +3,7 @@ import { age, formatDate, formatMontant, joursRestants } from '../lib/helpers';
 import { avatarColor, getInitials } from '../lib/helpers';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer
 } from 'recharts';
 
 const COLORS = ['#00875A', '#0059B3', '#F59E0B', '#DC3545', '#8B5CF6', '#EC4899'];

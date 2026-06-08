@@ -6,9 +6,10 @@ export function useProfil(user) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) loadProfil();
-    else { setProfil(null); setLoading(false); }
-  }, [user]);
+  if (user) loadProfil();
+  else { setProfil(null); setLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user]);
 
   async function loadProfil() {
     setLoading(true);

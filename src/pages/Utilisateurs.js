@@ -17,11 +17,9 @@ const ROLES = [
 
 export default function Utilisateurs({ profil }) {
   const [utilisateurs, setUtilisateurs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ email: '', nom: '', prenom: '', role: 'rh', password: '' });
-  const [saving, setSaving] = useState(false);
-  const [editUser, setEditUser] = useState(null);
+const [loading, setLoading] = useState(true);
+const [modal, setModal] = useState(false);
+const [form, setForm] = useState({ email: '', nom: '', prenom: '', role: 'rh', password: '' });
 
   useEffect(() => { loadUtilisateurs(); }, []);
 
@@ -33,11 +31,6 @@ export default function Utilisateurs({ profil }) {
   }
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
-
-  async function handleCreate() {
-  showToast('Pour créer un utilisateur, allez dans Supabase → Authentication → Users', 'warning');
-  setModal(false);
-}
 
   async function handleUpdateRole(id, role) {
     await supabase.from('profils').update({ role }).eq('id', id);
