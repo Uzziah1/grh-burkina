@@ -1,5 +1,5 @@
 import React from 'react';
-import { age, formatDate, joursRestants } from '../lib/helpers';
+import { formatDate, joursRestants } from '../lib/helpers';
 import { avatarColor, getInitials } from '../lib/helpers';
 
 export default function Dashboard({ agents }) {
