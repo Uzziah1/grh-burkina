@@ -58,13 +58,13 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
     return true;
   });
 
-  function openAdd() {
+  async function openAdd() {
     setForm(emptyForm);
     setEditAgent(null);
     setModal(true);
   }
 
-  function openEdit(a) {
+  async function openEdit(a) {
     setForm({ ...emptyForm, ...a, salaire_brut: a.salaire_brut || '', nombre_enfants: a.nombre_enfants || 0 });
     setEditAgent(a);
     setModal(true);
@@ -108,18 +108,18 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
     onRefresh();
   }
 
-  function generateDoc(type, a) {
+  async function generateDoc(type, a) {
     if (!entreprise || !entreprise.nom) {
       showToast('Veuillez d\'abord configurer les informations de l\'entreprise', 'error');
       return;
     }
     try {
-      if (type === 'cdi') generateCDI(a, entreprise);
-      else if (type === 'cdd') generateCDD(a, entreprise);
-      else if (type === 'attestation') generateAttestation(a, entreprise);
-      else if (type === 'conge') generateConge(a, entreprise);
-      else if (type === 'absence') generateAbsence(a, entreprise);
-      else if (type === 'avance') generateAvance(a, entreprise);
+      if (type === 'cdi') await generateCDI(a, entreprise);
+      else if (type === 'cdd') await generateCDD(a, entreprise);
+      else if (type === 'attestation') await generateAttestation(a, entreprise);
+      else if (type === 'conge') await generateConge(a, entreprise);
+      else if (type === 'absence') await generateAbsence(a, entreprise);
+      else if (type === 'avance') await generateAvance(a, entreprise);
       showToast('PDF généré et téléchargé');
       setDocModal(null);
     } catch (e) {
@@ -127,7 +127,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
     }
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     const data = agents.map(a => ({
       'Matricule': a.matricule || '', 'Nom': a.nom, 'Prénom': a.prenom,
       'Sexe': a.sexe || '', 'Date naissance': a.date_naissance || '', 'Âge': age(a.date_naissance),

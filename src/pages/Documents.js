@@ -27,19 +27,19 @@ export default function Documents({ agents, entreprise }) {
 
   const agent = agents.find(a => a.id === selectedAgent);
 
-  function handleGenerate(type) {
+  async function handleGenerate(type) {
     if (!agent) { showToast('Veuillez sélectionner un agent', 'error'); return; }
     if (!entreprise || !entreprise.nom) {
       showToast('Veuillez d\'abord remplir les informations de l\'entreprise', 'error');
       return;
     }
     try {
-      if (type === 'cdi') generateCDI(agent, entreprise);
-      else if (type === 'cdd') generateCDD(agent, entreprise);
-      else if (type === 'attestation') generateAttestation(agent, entreprise);
-      else if (type === 'conge') generateConge(agent, entreprise);
-      else if (type === 'absence') generateAbsence(agent, entreprise);
-      else if (type === 'avance') generateAvance(agent, entreprise);
+      if (type === 'cdi') await generateCDI(agent, entreprise);
+      else if (type === 'cdd') await generateCDD(agent, entreprise);
+      else if (type === 'attestation') await generateAttestation(agent, entreprise);
+      else if (type === 'conge') await generateConge(agent, entreprise);
+      else if (type === 'absence') await generateAbsence(agent, entreprise);
+      else if (type === 'avance') await generateAvance(agent, entreprise);
       showToast('PDF généré et téléchargé avec succès');
     } catch (e) {
       showToast('Erreur lors de la génération du PDF', 'error');

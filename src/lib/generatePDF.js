@@ -4,13 +4,42 @@ const BLEU = [0, 51, 102];
 const VERT = [0, 135, 90];
 const GRIS = [100, 100, 100];
 
-function entete(doc, entreprise) {
+async function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+async function entete(doc, entreprise) {
   doc.setFillColor(...BLEU);
   doc.rect(0, 0, 210, 28, 'F');
+
+  // Logo si disponible
+  if (entreprise.logo_url) {
+    try {
+      const imgData = await loadImage(entreprise.logo_url);
+      if (imgData) {
+        doc.addImage(imgData, 'PNG', 4, 2, 24, 24);
+      }
+    } catch (e) {}
+  }
+
+  const textX = entreprise.logo_url ? 32 : 14;
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(entreprise.nom || 'Nom de l\'entreprise', 14, 11);
+  doc.text(entreprise.nom || 'Nom de l\'entreprise', textX, 11);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   const infos = [
@@ -20,9 +49,9 @@ function entete(doc, entreprise) {
     entreprise.ifu ? `IFU: ${entreprise.ifu}` : '',
     entreprise.telephone,
   ].filter(Boolean).join('  |  ');
-  doc.text(infos, 14, 18);
+  doc.text(infos, textX, 18);
   doc.setFontSize(9);
-  doc.text(`Représenté par: ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'}`, 14, 24);
+  doc.text(`Représenté par: ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'}`, textX, 24);
   doc.setTextColor(0, 0, 0);
 }
 
@@ -123,11 +152,11 @@ function piedPage(doc, today) {
   }
 }
 
-export function generateAttestation(agent, entreprise) {
+export async function generateAttestation(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
+  await entete(doc, entreprise);
   let y = 35;
   y = titrePrincipal(doc, 'ATTESTATION DE TRAVAIL', y);
 
@@ -153,11 +182,11 @@ export function generateAttestation(agent, entreprise) {
   doc.save(`attestation_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export function generateConge(agent, entreprise) {
+export async function generateConge(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
+  await entete(doc, entreprise);
   let y = 35;
   y = titrePrincipal(doc, 'AUTORISATION DE CONGÉ', y);
 
@@ -185,11 +214,11 @@ export function generateConge(agent, entreprise) {
   doc.save(`conge_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export function generateAbsence(agent, entreprise) {
+export async function generateAbsence(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
+  await entete(doc, entreprise);
   let y = 35;
   y = titrePrincipal(doc, 'AUTORISATION D\'ABSENCE', y);
 
@@ -215,11 +244,11 @@ export function generateAbsence(agent, entreprise) {
   doc.save(`absence_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export function generateAvance(agent, entreprise) {
+export async function generateAvance(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
+  await entete(doc, entreprise);
   let y = 35;
   y = titrePrincipal(doc, 'DEMANDE D\'AVANCE SUR SALAIRE', y);
 
@@ -259,11 +288,11 @@ export function generateAvance(agent, entreprise) {
   doc.save(`avance_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export function generateCDI(agent, entreprise) {
+export async function generateCDI(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
+  await entete(doc, entreprise);
   let y = 35;
   y = titrePrincipal(doc, 'CONTRAT À DURÉE INDÉTERMINÉE (CDI)', y);
 
