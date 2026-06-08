@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { peutFaire } from '../lib/useProfil';
 import { age, formatDate, getInitials, avatarColor, joursRestants } from '../lib/helpers';
 import * as XLSX from 'xlsx';
 import {
@@ -31,7 +32,7 @@ const emptyForm = {
   date_embauche: '', date_fin_contrat: '', salaire_brut: '', statut: 'Actif',
 };
 
-export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
+export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, profil }) {
   const [filters, setFilters] = useState({ search: '', type: '', poste: '', categorie: '', age: '' });
   const [modal, setModal] = useState(false);
   const [editAgent, setEditAgent] = useState(null);
@@ -208,8 +209,10 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
 
       <div className="card">
         <div className="card-header">
-          <h3>{filtered.length} agent(s)</h3>
-          <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Ajouter un agent</button>
+        <h3>{filtered.length} agent(s)</h3>
+        {peutFaire(profil, 'modifierAgents') && (
+            <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Ajouter un agent</button>
+        )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -248,13 +251,17 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
                     <td>{age(a.date_naissance)}</td>
                     <td><span className={`badge ${a.statut === 'Actif' ? 'badge-green' : 'badge-gray'}`}>{a.statut || 'Actif'}</span></td>
                     <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => onOpenFiche(a.id)}>👁</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openEdit(a)}>✏</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setDocModal(a)}>📄</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>🗑</button>
-                    </div>
-                    </td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => onOpenFiche(a.id)}>👁</button>
+                    {peutFaire(profil, 'modifierAgents') && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(a)}>✏</button>
+                    )}
+                    <button className="btn btn-secondary btn-sm" onClick={() => setDocModal(a)}>📄</button>
+                    {peutFaire(profil, 'supprimerAgents') && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>🗑</button>
+                    )}
+                </div>
+                </td>       
                   </tr>
                 );
               })}

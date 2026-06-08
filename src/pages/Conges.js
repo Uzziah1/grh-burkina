@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/helpers';
+import { peutFaire } from '../lib/useProfil';
 
 function showToast(msg, type = 'success') {
   const t = document.createElement('div');
@@ -10,7 +11,7 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-export default function Conges({ conges, agents, onRefresh }) {
+export default function Conges({ conges, agents, onRefresh, profil }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     agent_id: '', date_debut: '', date_fin: '', nombre_jours: '', motif: 'Congé annuel payé'
@@ -79,10 +80,12 @@ export default function Conges({ conges, agents, onRefresh }) {
 
       <div className="card">
         <div className="card-header">
-          <h3>Demandes de congés</h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+        <h3>Demandes de congés</h3>
+        {peutFaire(profil, 'modifierConges') && (
+            <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
             + Nouvelle demande
-          </button>
+            </button>
+        )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -117,14 +120,16 @@ export default function Conges({ conges, agents, onRefresh }) {
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {c.statut === 'En attente' && <>
-                        <button className="btn btn-secondary btn-sm" onClick={() => updateStatut(c.id, 'Approuvé')}>✓ Approuver</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => updateStatut(c.id, 'Refusé')}>✗ Refuser</button>
-                      </>}
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c.id)}>🗑</button>
-                    </div>
-                  </td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    {peutFaire(profil, 'modifierConges') && c.statut === 'En attente' && <>
+                    <button className="btn btn-secondary btn-sm" onClick={() => updateStatut(c.id, 'Approuvé')}>✓ Approuver</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => updateStatut(c.id, 'Refusé')}>✗ Refuser</button>
+                    </>}
+                    {peutFaire(profil, 'modifierConges') && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c.id)}>🗑</button>
+                    )}
+                </div>
+                </td>
                 </tr>
               ))}
             </tbody>

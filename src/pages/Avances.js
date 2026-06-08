@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate, formatMontant } from '../lib/helpers';
+import { peutFaire } from '../lib/useProfil';
 
 function showToast(msg, type = 'success') {
   const t = document.createElement('div');
@@ -10,7 +11,7 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-export default function Avances({ avances, agents, onRefresh }) {
+export default function Avances({ avances, agents, onRefresh, profil }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     agent_id: '', montant: '', date_demande: new Date().toISOString().split('T')[0], motif: ''
@@ -82,10 +83,12 @@ export default function Avances({ avances, agents, onRefresh }) {
 
       <div className="card">
         <div className="card-header">
-          <h3>Avances sur salaire</h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+        <h3>Avances sur salaire</h3>
+        {peutFaire(profil, 'modifierAvances') && (
+            <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
             + Nouvelle demande
-          </button>
+            </button>
+        )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -118,14 +121,16 @@ export default function Avances({ avances, agents, onRefresh }) {
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {a.statut === 'En attente' && <>
-                        <button className="btn btn-secondary btn-sm" onClick={() => updateStatut(a.id, 'Approuvé')}>✓ Approuver</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => updateStatut(a.id, 'Refusé')}>✗ Refuser</button>
-                      </>}
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>🗑</button>
-                    </div>
-                  </td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    {peutFaire(profil, 'modifierAvances') && a.statut === 'En attente' && <>
+                    <button className="btn btn-secondary btn-sm" onClick={() => updateStatut(a.id, 'Approuvé')}>✓ Approuver</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => updateStatut(a.id, 'Refusé')}>✗ Refuser</button>
+                    </>}
+                    {peutFaire(profil, 'modifierAvances') && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>🗑</button>
+                    )}
+                </div>
+                </td>
                 </tr>
               ))}
             </tbody>
