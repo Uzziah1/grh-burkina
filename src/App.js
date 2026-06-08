@@ -9,6 +9,7 @@ import Conges from './pages/Conges';
 import Avances from './pages/Avances';
 import Documents from './pages/Documents';
 import Entreprise from './pages/Entreprise';
+import FicheAgent from './pages/FicheAgent';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -17,6 +18,7 @@ export default function App() {
   const [conges, setConges] = useState([]);
   const [avances, setAvances] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
+  const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +49,11 @@ export default function App() {
     setEntreprise(ent.data || {});
   }
 
+  function openFiche(agentId) {
+    setSelectedAgentId(agentId);
+    setPage('fiche');
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1C2B3A', color: '#fff', fontSize: 16 }}>
       Chargement...
@@ -56,13 +63,14 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const pages = {
-    dashboard: <Dashboard agents={agents} />,
-    agents: <Agents agents={agents} onRefresh={loadData} entreprise={entreprise} />,
-    contrats: <Contrats agents={agents} />,
+    dashboard: <Dashboard agents={agents} onOpenFiche={openFiche} />,
+    agents: <Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} />,
+    contrats: <Contrats agents={agents} onOpenFiche={openFiche} />,
     conges: <Conges conges={conges} agents={agents} onRefresh={loadData} />,
     avances: <Avances avances={avances} agents={agents} onRefresh={loadData} />,
     documents: <Documents agents={agents} entreprise={entreprise} />,
     entreprise: <Entreprise onRefresh={loadData} />,
+    fiche: <FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} />,
   };
 
   return (

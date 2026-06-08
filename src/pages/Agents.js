@@ -31,7 +31,7 @@ const emptyForm = {
   date_embauche: '', date_fin_contrat: '', salaire_brut: '', statut: 'Actif',
 };
 
-export default function Agents({ agents, onRefresh, entreprise }) {
+export default function Agents({ agents, onRefresh, entreprise, onOpenFiche }) {
   const [filters, setFilters] = useState({ search: '', type: '', poste: '', categorie: '', age: '' });
   const [modal, setModal] = useState(false);
   const [editAgent, setEditAgent] = useState(null);
@@ -248,11 +248,12 @@ export default function Agents({ agents, onRefresh, entreprise }) {
                     <td>{age(a.date_naissance)}</td>
                     <td><span className={`badge ${a.statut === 'Actif' ? 'badge-green' : 'badge-gray'}`}>{a.statut || 'Actif'}</span></td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => onOpenFiche(a.id)}>👁</button>
                         <button className="btn btn-secondary btn-sm" onClick={() => openEdit(a)}>✏</button>
                         <button className="btn btn-secondary btn-sm" onClick={() => setDocModal(a)}>📄</button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>🗑</button>
-                      </div>
+                    </div>
                     </td>
                   </tr>
                 );
