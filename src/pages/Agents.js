@@ -89,6 +89,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [docModal, setDocModal] = useState(null);
+  const [step, setStep] = useState(1);
 
   // ── Unique filter options ──
   const postes = [...new Set(agents.map(a => a.poste))].sort();
@@ -598,112 +599,221 @@ function importExcel(file) {
       </div>
 
       {/* ════════════════════════════════
-          MODAL: Add / Edit agent
-      ════════════════════════════════ */}
-      {modal && (
-        <div className="modal-overlay" onClick={e => {
-          if (e.target === e.currentTarget) { setModal(false); setEditAgent(null); }
-        }}>
-          <div className="modal">
-            <div className="modal-header">
-              <h3>{editAgent ? 'Modifier l\'agent' : 'Nouvel agent'}</h3>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => { setModal(false); setEditAgent(null); }}
+    MODAL: Add / Edit agent (multi-step)
+════════════════════════════════ */}
+{modal && (
+  <div className="modal-overlay" onClick={e => {
+    if (e.target === e.currentTarget) { setModal(false); setEditAgent(null); setStep(1); }
+  }}>
+    <div className="modal">
+      <div className="modal-header">
+        <div>
+          <h3>{editAgent ? 'Modifier l\'agent' : 'Nouvel agent'}</h3>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            {[
+              { n: 1, label: 'Identité' },
+              { n: 2, label: 'Coordonnées' },
+              { n: 3, label: 'Formation' },
+              { n: 4, label: 'Poste & Contrat' },
+            ].map(s => (
+              <div
+                key={s.n}
+                onClick={() => setStep(s.n)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  cursor: 'pointer',
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  fontSize: 11, fontWeight: 600,
+                  fontFamily: 'Poppins, sans-serif',
+                  background: step === s.n ? '#E8920A' : step > s.n ? '#FEF3E2' : '#F5F5F5',
+                  color: step === s.n ? '#fff' : step > s.n ? '#E8920A' : '#A3A3A3',
+                  transition: 'all 0.15s',
+                }}
               >
-                <X size={14} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <FormSection title="Informations personnelles" />
-              <div className="form-grid">
-                <div className="form-group"><label>Matricule</label><input value={form.matricule} onChange={e => setF('matricule', e.target.value)} /></div>
-                <div className="form-group"><label>Nom *</label><input value={form.nom} onChange={e => setF('nom', e.target.value)} /></div>
-                <div className="form-group"><label>Prénom(s) *</label><input value={form.prenom} onChange={e => setF('prenom', e.target.value)} /></div>
-                <div className="form-group">
-                  <label>Sexe</label>
-                  <select value={form.sexe} onChange={e => setF('sexe', e.target.value)}>
-                    <option value="">—</option>
-                    <option>Masculin</option>
-                    <option>Féminin</option>
-                  </select>
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%',
+                  background: step === s.n ? 'rgba(255,255,255,0.3)' : step > s.n ? '#E8920A' : '#E5E5E5',
+                  color: step === s.n ? '#fff' : step > s.n ? '#fff' : '#A3A3A3',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700,
+                }}>
+                  {step > s.n ? '✓' : s.n}
                 </div>
-                <div className="form-group"><label>Date de naissance</label><input type="date" value={form.date_naissance} onChange={e => setF('date_naissance', e.target.value)} /></div>
-                <div className="form-group"><label>Lieu de naissance</label><input value={form.lieu_naissance} onChange={e => setF('lieu_naissance', e.target.value)} /></div>
-                <div className="form-group"><label>Nationalité</label><input value={form.nationalite} onChange={e => setF('nationalite', e.target.value)} /></div>
-                <div className="form-group">
-                  <label>Situation matrimoniale</label>
-                  <select value={form.situation_matrimoniale} onChange={e => setF('situation_matrimoniale', e.target.value)}>
-                    <option value="">—</option>
-                    {SITUATIONS.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
-                <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} /></div>
-                <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} /></div>
+                {s.label}
               </div>
-
-              <FormSection title="Coordonnées" />
-              <div className="form-grid">
-                <div className="form-group full"><label>Adresse</label><input value={form.adresse} onChange={e => setF('adresse', e.target.value)} /></div>
-                <div className="form-group"><label>Téléphone</label><input value={form.telephone} onChange={e => setF('telephone', e.target.value)} /></div>
-                <div className="form-group"><label>Email</label><input type="email" value={form.email} onChange={e => setF('email', e.target.value)} /></div>
-                <div className="form-group"><label>Personne à contacter (urgence)</label><input value={form.urgence_nom} onChange={e => setF('urgence_nom', e.target.value)} /></div>
-                <div className="form-group"><label>Tél. urgence</label><input value={form.urgence_telephone} onChange={e => setF('urgence_telephone', e.target.value)} /></div>
-              </div>
-
-              <FormSection title="Formation" />
-              <div className="form-grid">
-                <div className="form-group"><label>Niveau d'études</label><input value={form.niveau_etudes} onChange={e => setF('niveau_etudes', e.target.value)} /></div>
-                <div className="form-group"><label>Diplôme</label><input value={form.diplome} onChange={e => setF('diplome', e.target.value)} /></div>
-                <div className="form-group full"><label>Spécialité</label><input value={form.specialite} onChange={e => setF('specialite', e.target.value)} /></div>
-              </div>
-
-              <FormSection title="Poste & Contrat" />
-              <div className="form-grid">
-                <div className="form-group"><label>Poste *</label><input value={form.poste} onChange={e => setF('poste', e.target.value)} /></div>
-                <div className="form-group"><label>Département</label><input value={form.departement} onChange={e => setF('departement', e.target.value)} /></div>
-                <div className="form-group">
-                  <label>Catégorie socioprofessionnelle</label>
-                  <select value={form.categorie_socioprofessionnelle} onChange={e => setF('categorie_socioprofessionnelle', e.target.value)}>
-                    <option value="">—</option>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Type de contrat *</label>
-                  <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)}>
-                    <option value="CDI">CDI</option>
-                    <option value="CDD">CDD</option>
-                  </select>
-                </div>
-                <div className="form-group"><label>Date d'embauche</label><input type="date" value={form.date_embauche} onChange={e => setF('date_embauche', e.target.value)} /></div>
-                <div className="form-group"><label>Date fin contrat (CDD)</label><input type="date" value={form.date_fin_contrat} onChange={e => setF('date_fin_contrat', e.target.value)} /></div>
-                <div className="form-group"><label>Salaire brut mensuel (FCFA)</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} /></div>
-                <div className="form-group">
-                  <label>Statut</label>
-                  <select value={form.statut} onChange={e => setF('statut', e.target.value)}>
-                    <option value="Actif">Actif</option>
-                    <option value="Inactif">Inactif</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setModal(false); setEditAgent(null); }}>
-                Annuler
-              </button>
-              <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-                <Save size={14} />
-                {loading ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-            </div>
+            ))}
           </div>
         </div>
-      )}
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => { setModal(false); setEditAgent(null); setStep(1); }}
+        >
+          <X size={14} />
+        </button>
+      </div>
 
+      <div className="modal-body">
+
+        {/* ── Step 1: Personal info ── */}
+        {step === 1 && (
+          <div>
+            <FormSection title="Informations personnelles" />
+            <div className="form-grid">
+              <div className="form-group"><label>Matricule</label><input value={form.matricule} onChange={e => setF('matricule', e.target.value)} placeholder="Ex: AG001" /></div>
+              <div className="form-group"><label>Nom *</label><input value={form.nom} onChange={e => setF('nom', e.target.value)} placeholder="Ex: OUEDRAOGO" /></div>
+              <div className="form-group"><label>Prénom(s) *</label><input value={form.prenom} onChange={e => setF('prenom', e.target.value)} placeholder="Ex: Jean" /></div>
+              <div className="form-group">
+                <label>Sexe</label>
+                <select value={form.sexe} onChange={e => setF('sexe', e.target.value)}>
+                  <option value="">—</option>
+                  <option>Masculin</option>
+                  <option>Féminin</option>
+                </select>
+              </div>
+              <div className="form-group"><label>Date de naissance</label><input type="date" value={form.date_naissance} onChange={e => setF('date_naissance', e.target.value)} /></div>
+              <div className="form-group"><label>Lieu de naissance</label><input value={form.lieu_naissance} onChange={e => setF('lieu_naissance', e.target.value)} placeholder="Ex: Ouagadougou" /></div>
+              <div className="form-group"><label>Nationalité</label><input value={form.nationalite} onChange={e => setF('nationalite', e.target.value)} /></div>
+              <div className="form-group">
+                <label>Situation matrimoniale</label>
+                <select value={form.situation_matrimoniale} onChange={e => setF('situation_matrimoniale', e.target.value)}>
+                  <option value="">—</option>
+                  {SITUATIONS.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
+              <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
+              <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Contact ── */}
+        {step === 2 && (
+          <div>
+            <FormSection title="Coordonnées" />
+            <div className="form-grid">
+              <div className="form-group full">
+                <label>Adresse complète</label>
+                <input value={form.adresse} onChange={e => setF('adresse', e.target.value)} placeholder="Ex: Secteur 12, Ouagadougou" />
+              </div>
+              <div className="form-group"><label>Téléphone principal</label><input value={form.telephone} onChange={e => setF('telephone', e.target.value)} placeholder="Ex: +226 70 00 00 00" /></div>
+              <div className="form-group"><label>Email professionnel</label><input type="email" value={form.email} onChange={e => setF('email', e.target.value)} placeholder="Ex: jean@entreprise.bf" /></div>
+            </div>
+
+            <FormSection title="Personne à contacter en cas d'urgence" />
+            <div className="form-grid">
+              <div className="form-group"><label>Nom complet</label><input value={form.urgence_nom} onChange={e => setF('urgence_nom', e.target.value)} placeholder="Nom et prénom" /></div>
+              <div className="form-group"><label>Téléphone urgence</label><input value={form.urgence_telephone} onChange={e => setF('urgence_telephone', e.target.value)} placeholder="Ex: +226 70 00 00 00" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Education ── */}
+        {step === 3 && (
+          <div>
+            <FormSection title="Formation et qualifications" />
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Niveau d'études</label>
+                <select value={form.niveau_etudes} onChange={e => setF('niveau_etudes', e.target.value)}>
+                  <option value="">—</option>
+                  {['Sans diplôme', 'CEPE', 'BEPC', 'CAP/BEP', 'Baccalauréat', 'BTS/DUT', 'Licence', 'Master', 'Doctorat'].map(n =>
+                    <option key={n}>{n}</option>
+                  )}
+                </select>
+              </div>
+              <div className="form-group"><label>Diplôme obtenu</label><input value={form.diplome} onChange={e => setF('diplome', e.target.value)} placeholder="Ex: Licence en Droit" /></div>
+              <div className="form-group full"><label>Spécialité / Filière</label><input value={form.specialite} onChange={e => setF('specialite', e.target.value)} placeholder="Ex: Droit du travail" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Job & Contract ── */}
+        {step === 4 && (
+          <div>
+            <FormSection title="Poste & Contrat" />
+            <div className="form-grid">
+              <div className="form-group"><label>Intitulé du poste *</label><input value={form.poste} onChange={e => setF('poste', e.target.value)} placeholder="Ex: Comptable" /></div>
+              <div className="form-group"><label>Département / Service</label><input value={form.departement} onChange={e => setF('departement', e.target.value)} placeholder="Ex: Finance" /></div>
+              <div className="form-group">
+                <label>Catégorie socioprofessionnelle</label>
+                <select value={form.categorie_socioprofessionnelle} onChange={e => setF('categorie_socioprofessionnelle', e.target.value)}>
+                  <option value="">—</option>
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Type de contrat *</label>
+                <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)}>
+                  <option value="CDI">CDI</option>
+                  <option value="CDD">CDD</option>
+                </select>
+              </div>
+              <div className="form-group"><label>Date d'embauche</label><input type="date" value={form.date_embauche} onChange={e => setF('date_embauche', e.target.value)} /></div>
+              <div className="form-group"><label>Date fin contrat (CDD)</label><input type="date" value={form.date_fin_contrat} onChange={e => setF('date_fin_contrat', e.target.value)} /></div>
+              <div className="form-group"><label>Salaire brut mensuel (FCFA)</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
+              <div className="form-group">
+                <label>Statut</label>
+                <select value={form.statut} onChange={e => setF('statut', e.target.value)}>
+                  <option value="Actif">Actif</option>
+                  <option value="Inactif">Inactif</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer navigation ── */}
+      <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+        <button
+          className="btn btn-secondary"
+          onClick={() => step > 1 ? setStep(step - 1) : (setModal(false), setEditAgent(null), setStep(1))}
+        >
+          {step === 1 ? <><X size={14} /> Annuler</> : <>← Précédent</>}
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Step dots */}
+          {[1,2,3,4].map(n => (
+            <div
+              key={n}
+              onClick={() => setStep(n)}
+              style={{
+                width: n === step ? 20 : 8,
+                height: 8, borderRadius: 4,
+                background: n === step ? '#E8920A' : n < step ? '#FDDBA0' : '#E5E5E5',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            />
+          ))}
+        </div>
+
+        {step < 4 ? (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              if (step === 1 && (!form.nom || !form.prenom)) {
+                showToast('Nom et prénom sont obligatoires', 'error');
+                return;
+              }
+              setStep(step + 1);
+            }}
+          >
+            Suivant →
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
+            <Save size={14} />
+            {loading ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)}
       {/* ════════════════════════════════
           MODAL: Document generation
       ════════════════════════════════ */}
