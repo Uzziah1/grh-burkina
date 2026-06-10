@@ -1,144 +1,438 @@
-import React from 'react';
-import { peutFaire } from '../lib/useProfil';
+// Layout.js - Main application layout with collapsible sidebar
+// White sidebar | Orange accent | Poppins font | Lucide icons
+// Features: collapsible sidebar with tooltips on collapsed state
 
-const allNavItems = [
-  {
-    id: 'dashboard', label: 'Tableau de bord', permission: null,
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-  },
-  {
-    id: 'agents', label: 'Agents', permission: 'voirAgents',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-  },
-  {
-    id: 'contrats', label: 'Contrats', permission: 'voirContrats',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-  },
-  {
-    id: 'conges', label: 'Congés', permission: 'voirConges',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-  },
-  {
-    id: 'avances', label: 'Avances salaire', permission: 'voirAvances',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-  },
-  {
-    id: 'documents', label: 'Documents', permission: 'voirDocuments',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-  },
+import React, { useState } from 'react';
+import { peutFaire } from '../lib/useProfil';
+import {
+  LayoutDashboard, Users, FileText, Calendar,
+  DollarSign, FolderOpen, Building2, UserCog,
+  LogOut, ChevronRight, ChevronLeft,
+} from 'lucide-react';
+
+// ── Navigation items ──────────────────────────────────────
+const mainNavItems = [
+  { id: 'dashboard',    label: 'Tableau de bord', permission: null,               icon: LayoutDashboard },
+  { id: 'agents',       label: 'Agents',           permission: 'voirAgents',       icon: Users },
+  { id: 'contrats',     label: 'Contrats',         permission: 'voirContrats',     icon: FileText },
+  { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
+  { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
+  { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
 ];
 
 const settingsNavItems = [
-  {
-    id: 'utilisateurs', label: 'Utilisateurs', permission: 'voirUtilisateurs',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>
-  },
-  {
-    id: 'entreprise', label: 'Entreprise', permission: 'voirEntreprise',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><rect x="9" y="14" width="6" height="7"/></svg>
-  },
+  { id: 'utilisateurs', label: 'Utilisateurs',     permission: 'voirUtilisateurs', icon: UserCog },
+  { id: 'entreprise',   label: 'Entreprise',       permission: 'voirEntreprise',   icon: Building2 },
 ];
 
+// ── Page titles ───────────────────────────────────────────
 const pageTitles = {
-  dashboard: 'Tableau de bord',
-  agents: 'Gestion des agents',
-  contrats: 'Suivi des contrats',
-  conges: 'Congés',
-  avances: 'Avances sur salaire',
-  documents: 'Documents',
-  entreprise: 'Mon Entreprise',
+  dashboard:    'Tableau de bord',
+  agents:       'Gestion des agents',
+  contrats:     'Suivi des contrats',
+  conges:       'Congés',
+  avances:      'Avances sur salaire',
+  documents:    'Documents',
+  entreprise:   'Mon Entreprise',
   utilisateurs: 'Gestion des utilisateurs',
-  fiche: 'Fiche agent',
+  fiche:        'Fiche agent',
 };
 
-function getRoleLabel(role) {
-  if (role === 'admin') return { label: '👑 Administrateur', color: '#DC3545' };
-  if (role === 'rh') return { label: '👤 Responsable RH', color: '#0059B3' };
-  if (role === 'comptable') return { label: '💼 Comptable', color: '#00875A' };
-  return { label: role, color: '#6B6B6B' };
+// ── Role display helper ───────────────────────────────────
+function getRoleInfo(role) {
+  const roles = {
+    admin:     { label: 'Administrateur', color: '#E8920A' },
+    rh:        { label: 'Responsable RH', color: '#2563EB' },
+    comptable: { label: 'Comptable',      color: '#16A34A' },
+  };
+  return roles[role] || { label: role, color: '#737373' };
 }
 
-export default function Layout({ children, page, setPage, user, profil, onLogout }) {
-  const roleInfo = profil ? getRoleLabel(profil.role) : null;
+// ── NavItem component ─────────────────────────────────────
+function NavItem({ item, isActive, onClick, collapsed }) {
+  const Icon = item.icon;
+  const [showTooltip, setShowTooltip] = useState(false);
 
-  const visibleNav = allNavItems.filter(n =>
+  return (
+    <div style={{ position: 'relative' }}>
+      <div
+        onClick={() => onClick(item.id)}
+        onMouseEnter={() => { if (collapsed) setShowTooltip(true); }}
+        onMouseLeave={() => setShowTooltip(false)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: collapsed ? 0 : 10,
+          padding: collapsed ? '11px 0' : '10px 20px',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          cursor: 'pointer',
+          fontSize: 13,
+          fontWeight: isActive ? 600 : 500,
+          color: isActive ? '#E8920A' : '#737373',
+          background: isActive ? '#FEF3E2' : 'transparent',
+          borderLeft: isActive && !collapsed ? '3px solid #E8920A' : '3px solid transparent',
+          transition: 'all 0.15s',
+          width: '100%',
+          boxSizing: 'border-box',
+          marginBottom: 1,
+        }}
+        onMouseEnter={e => {
+          if (collapsed) setShowTooltip(true);
+          if (!isActive) {
+            e.currentTarget.style.background = '#FEF3E2';
+            e.currentTarget.style.color = '#E8920A';
+          }
+        }}
+        onMouseLeave={e => {
+          setShowTooltip(false);
+          if (!isActive) {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = '#737373';
+          }
+        }}
+      >
+        <Icon size={18} strokeWidth={2} />
+        {!collapsed && (
+          <>
+            <span style={{ flex: 1, fontFamily: 'Poppins, sans-serif' }}>{item.label}</span>
+            {isActive && <ChevronRight size={13} strokeWidth={2.5} style={{ opacity: 0.6 }} />}
+          </>
+        )}
+      </div>
+
+      {/* Tooltip when collapsed */}
+      {collapsed && showTooltip && (
+        <div style={{
+          position: 'absolute',
+          left: '110%',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: '#1A1A1A',
+          color: '#fff',
+          padding: '6px 12px',
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+          zIndex: 9999,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          fontFamily: 'Poppins, sans-serif',
+          pointerEvents: 'none',
+        }}>
+          {item.label}
+          {/* Arrow */}
+          <div style={{
+            position: 'absolute',
+            left: -5, top: '50%',
+            transform: 'translateY(-50%)',
+            width: 0, height: 0,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: '5px solid #1A1A1A',
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Layout ───────────────────────────────────────────
+export default function Layout({ children, page, setPage, user, profil, onLogout }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const roleInfo = profil ? getRoleInfo(profil.role) : null;
+  const sidebarWidth = collapsed ? 64 : 240;
+
+  const visibleMain = mainNavItems.filter(n =>
     n.permission === null || peutFaire(profil, n.permission)
   );
-
   const visibleSettings = settingsNavItems.filter(n =>
     peutFaire(profil, n.permission)
   );
 
   return (
     <div className="app">
-      <div className="sidebar">
-        <div className="logo">
-          <h1>GRH Burkina</h1>
-          <p>Gestion des Ressources Humaines</p>
-        </div>
-        <nav className="nav">
-          <div className="nav-section">Menu</div>
-          {visibleNav.map(n => (
-            <div
-              key={n.id}
-              className={`nav-item ${page === n.id ? 'active' : ''}`}
-              onClick={() => setPage(n.id)}
-            >
-              {n.icon}
-              {n.label}
+
+      {/* ════════════════════════════════
+          SIDEBAR
+      ════════════════════════════════ */}
+      <div style={{
+        width: sidebarWidth,
+        background: '#FFFFFF',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        flexShrink: 0,
+        borderRight: '1px solid #E5E5E5',
+        boxShadow: '1px 0 8px rgba(0,0,0,0.04)',
+        transition: 'width 0.25s ease',
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+
+        {/* Logo */}
+        <div style={{
+          padding: collapsed ? '22px 0 18px' : '22px 20px 18px',
+          borderBottom: '1px solid #F5F5F5',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          gap: 10,
+          overflow: 'hidden',
+          transition: 'padding 0.25s ease',
+        }}>
+          <div style={{
+            width: 36, height: 36,
+            background: '#E8920A',
+            borderRadius: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(232,146,10,0.3)',
+          }}>
+            <Users size={18} color="#fff" strokeWidth={2.5} />
+          </div>
+          {!collapsed && (
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{
+                color: '#0F0F0F', fontSize: 15,
+                fontWeight: 700, letterSpacing: '-0.3px',
+                fontFamily: 'Poppins, sans-serif',
+                whiteSpace: 'nowrap',
+              }}>
+                RH Manager
+              </div>
+              <div style={{
+                color: '#A3A3A3', fontSize: 11,
+                marginTop: 1, fontFamily: 'Poppins, sans-serif',
+                whiteSpace: 'nowrap',
+              }}>
+                Gestion RH
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Toggle button */}
+        <div
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            position: 'absolute',
+            top: 22,
+            right: -12,
+            width: 24, height: 24,
+            background: '#FFFFFF',
+            border: '1.5px solid #E5E5E5',
+            borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+            transition: 'all 0.15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#E8920A';
+            e.currentTarget.style.borderColor = '#E8920A';
+            e.currentTarget.querySelector('svg').style.color = '#fff';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = '#FFFFFF';
+            e.currentTarget.style.borderColor = '#E5E5E5';
+            e.currentTarget.querySelector('svg').style.color = '#737373';
+          }}
+        >
+          {collapsed
+            ? <ChevronRight size={13} color="#737373" strokeWidth={2.5} />
+            : <ChevronLeft size={13} color="#737373" strokeWidth={2.5} />
+          }
+        </div>
+
+        {/* Navigation */}
+        <nav style={{ flex: 1, padding: '14px 0', overflowY: 'auto', overflowX: 'hidden' }}>
+
+          {/* Section label */}
+          {!collapsed && (
+            <div style={{
+              color: '#A3A3A3', fontSize: 10, fontWeight: 600,
+              letterSpacing: '1.2px', textTransform: 'uppercase',
+              padding: '10px 20px 6px',
+              fontFamily: 'Poppins, sans-serif',
+              whiteSpace: 'nowrap',
+            }}>
+              Menu principal
+            </div>
+          )}
+
+          {collapsed && <div style={{ height: 10 }} />}
+
+          {visibleMain.map(n => (
+            <NavItem
+              key={n.id}
+              item={n}
+              isActive={page === n.id || (page === 'fiche' && n.id === 'agents')}
+              onClick={setPage}
+              collapsed={collapsed}
+            />
           ))}
 
           {visibleSettings.length > 0 && (
             <>
-              <div className="nav-section">Paramètres</div>
-              {visibleSettings.map(n => (
-                <div
-                  key={n.id}
-                  className={`nav-item ${page === n.id ? 'active' : ''}`}
-                  onClick={() => setPage(n.id)}
-                >
-                  {n.icon}
-                  {n.label}
+              {!collapsed && (
+                <div style={{
+                  color: '#A3A3A3', fontSize: 10, fontWeight: 600,
+                  letterSpacing: '1.2px', textTransform: 'uppercase',
+                  padding: '16px 20px 6px',
+                  fontFamily: 'Poppins, sans-serif',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Paramètres
                 </div>
+              )}
+              {collapsed && <div style={{ height: 10 }} />}
+              {visibleSettings.map(n => (
+                <NavItem
+                  key={n.id}
+                  item={n}
+                  isActive={page === n.id}
+                  onClick={setPage}
+                  collapsed={collapsed}
+                />
               ))}
             </>
           )}
         </nav>
 
-        <div className="nav-footer">
-          {/* Infos utilisateur connecté */}
-          {profil && (
+        {/* User info + logout */}
+        <div style={{
+          padding: '12px 0',
+          borderTop: '1px solid #F5F5F5',
+        }}>
+          {/* User card - only when expanded */}
+          {profil && !collapsed && (
             <div style={{
-              padding: '10px 12px', marginBottom: 4,
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: 8, marginLeft: 4, marginRight: 4
+              margin: '0 12px 8px',
+              padding: '10px 12px',
+              background: '#FAFAFA',
+              border: '1px solid #E5E5E5',
+              borderRadius: 10,
             }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>
-                {profil.prenom || profil.email}
-              </div>
-              <div style={{ fontSize: 11, color: roleInfo?.color, marginTop: 2 }}>
-                {roleInfo?.label}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: roleInfo?.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
+                }}>
+                  {(profil.prenom || profil.email || '?')[0].toUpperCase()}
+                </div>
+                <div style={{ overflow: 'hidden', flex: 1 }}>
+                  <div style={{
+                    fontSize: 12, fontWeight: 600, color: '#1A1A1A',
+                    whiteSpace: 'nowrap', overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    fontFamily: 'Poppins, sans-serif',
+                  }}>
+                    {profil.prenom
+                      ? `${profil.prenom} ${profil.nom || ''}`.trim()
+                      : profil.email}
+                  </div>
+                  <div style={{
+                    fontSize: 10, color: roleInfo?.color,
+                    marginTop: 1, fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 500,
+                  }}>
+                    {roleInfo?.label}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          <div className="nav-item" onClick={onLogout}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-            Déconnexion
+
+          {/* Avatar only when collapsed */}
+          {profil && collapsed && (
+            <div style={{
+              display: 'flex', justifyContent: 'center',
+              marginBottom: 6,
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: roleInfo?.color,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: '#fff',
+              }}>
+                {(profil.prenom || profil.email || '?')[0].toUpperCase()}
+              </div>
+            </div>
+          )}
+
+          {/* Logout */}
+          <div
+            onClick={onLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: collapsed ? 0 : 10,
+              padding: collapsed ? '9px 0' : '9px 20px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              cursor: 'pointer',
+              fontSize: 13, fontWeight: 500,
+              color: '#DC2626',
+              transition: 'all 0.15s',
+              fontFamily: 'Poppins, sans-serif',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <LogOut size={17} strokeWidth={2} />
+            {!collapsed && <span>Déconnexion</span>}
           </div>
         </div>
       </div>
-      <div className="main">
-        <div className="topbar">
-          <h2>{pageTitles[page]}</h2>
-          <div className="topbar-right">
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{user?.email}</span>
+
+      {/* ════════════════════════════════
+          MAIN CONTENT
+      ════════════════════════════════ */}
+      <div className="main" style={{ transition: 'all 0.25s ease' }}>
+
+        {/* Topbar */}
+        <div style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E5E5E5',
+          padding: '0 28px',
+          height: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        }}>
+          <h2 style={{
+            fontSize: 16, fontWeight: 700,
+            color: '#0F0F0F', letterSpacing: '-0.2px',
+            fontFamily: 'Poppins, sans-serif',
+          }}>
+            {pageTitles[page] || 'RH Manager'}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '6px 12px',
+              background: '#FAFAFA',
+              border: '1px solid #E5E5E5',
+              borderRadius: 8, fontSize: 12,
+              color: '#737373',
+              fontFamily: 'Poppins, sans-serif',
+            }}>
+              <div style={{
+                width: 7, height: 7,
+                borderRadius: '50%',
+                background: '#16A34A',
+              }} />
+              {user?.email}
+            </div>
           </div>
         </div>
+
+        {/* Page content */}
         <div className="content">
           {children}
         </div>
