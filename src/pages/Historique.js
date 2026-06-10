@@ -4,8 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  History, Search, Filter, UserPlus,
-  UserMinus, Pencil, Trash2, FileText,
+  History, Search, UserPlus,
+  Pencil, Trash2, FileText,
   Calendar, DollarSign, RefreshCw,
 } from 'lucide-react';
 

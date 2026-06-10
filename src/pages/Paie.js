@@ -3,14 +3,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { formatDate, getInitials, avatarColor } from '../lib/helpers';
+import { getInitials, avatarColor } from '../lib/helpers';
 import {
   calculerBulletin, calculerNombreParts, formatFCFA,
 } from '../lib/calcPaie';
 import {
   DollarSign, Plus, FileText, Search,
-  ChevronDown, ChevronUp, X, Save,
-  Printer, Eye, Trash2, CheckCircle,
+  X, Save, Printer, Eye, Trash2, CheckCircle,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
@@ -241,7 +240,10 @@ export default function Paie({ agents, entreprise, profil }) {
     observations: '',
   });
 
-  useEffect(() => { loadBulletins(); }, [filterMois, filterAnnee]);
+  useEffect(() => {
+  loadBulletins();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [filterMois, filterAnnee]);
 
   // ── Load bulletins ──
   async function loadBulletins() {
@@ -347,7 +349,6 @@ export default function Paie({ agents, entreprise, profil }) {
   const totalNet      = bulletins.reduce((s, b) => s + (b.salaire_net || 0), 0);
   const totalBrut     = bulletins.reduce((s, b) => s + (b.salaire_brut || 0), 0);
   const totalCNSS     = bulletins.reduce((s, b) => s + (b.cnss_patronal || 0), 0);
-  const totalIUTS     = bulletins.reduce((s, b) => s + (b.iuts || 0), 0);
   const valides       = bulletins.filter(b => b.statut === 'Validé').length;
 
   const years = Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
