@@ -7,7 +7,7 @@ import { formatDate, formatMontant, getInitials, avatarColor } from '../lib/help
 import { peutFaire } from '../lib/useProfil';
 import {
   DollarSign, Plus, Check, X, Trash2,
-  Clock, CheckCircle, XCircle, Search, TrendingUp,
+  Clock, CheckCircle, Search, TrendingUp,
 } from 'lucide-react';
 
 // ── Toast notification ────────────────────────────────────
@@ -94,7 +94,6 @@ export default function Avances({ avances, agents, onRefresh, profil }) {
   // ── Compute stats ──
   const enAttente    = avances.filter(a => a.statut === 'En attente').length;
   const approuves    = avances.filter(a => a.statut === 'Approuvé').length;
-  const refuses      = avances.filter(a => a.statut === 'Refusé').length;
   const totalMontant = avances
     .filter(a => a.statut === 'Approuvé')
     .reduce((s, a) => s + (parseFloat(a.montant) || 0), 0);

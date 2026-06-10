@@ -57,7 +57,7 @@ function NavItem({ item, isActive, onClick, collapsed }) {
     <div style={{ position: 'relative' }}>
       <div
         onClick={() => onClick(item.id)}
-        onMouseEnter={() => { if (collapsed) setShowTooltip(true); }}
+        onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         style={{
           display: 'flex',
@@ -76,20 +76,6 @@ function NavItem({ item, isActive, onClick, collapsed }) {
           boxSizing: 'border-box',
           marginBottom: 1,
         }}
-        onMouseEnter={e => {
-          if (collapsed) setShowTooltip(true);
-          if (!isActive) {
-            e.currentTarget.style.background = '#FEF3E2';
-            e.currentTarget.style.color = '#E8920A';
-          }
-        }}
-        onMouseLeave={e => {
-          setShowTooltip(false);
-          if (!isActive) {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#737373';
-          }
-        }}
       >
         <Icon size={18} strokeWidth={2} />
         {!collapsed && (
@@ -100,30 +86,21 @@ function NavItem({ item, isActive, onClick, collapsed }) {
         )}
       </div>
 
-      {/* Tooltip when collapsed */}
       {collapsed && showTooltip && (
         <div style={{
-          position: 'absolute',
-          left: '110%',
-          top: '50%',
+          position: 'absolute', left: '110%', top: '50%',
           transform: 'translateY(-50%)',
-          background: '#1A1A1A',
-          color: '#fff',
-          padding: '6px 12px',
-          borderRadius: 8,
-          fontSize: 12,
-          fontWeight: 500,
-          whiteSpace: 'nowrap',
-          zIndex: 9999,
+          background: '#1A1A1A', color: '#fff',
+          padding: '6px 12px', borderRadius: 8,
+          fontSize: 12, fontWeight: 500,
+          whiteSpace: 'nowrap', zIndex: 9999,
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           fontFamily: 'Poppins, sans-serif',
           pointerEvents: 'none',
         }}>
           {item.label}
-          {/* Arrow */}
           <div style={{
-            position: 'absolute',
-            left: -5, top: '50%',
+            position: 'absolute', left: -5, top: '50%',
             transform: 'translateY(-50%)',
             width: 0, height: 0,
             borderTop: '5px solid transparent',
@@ -135,7 +112,6 @@ function NavItem({ item, isActive, onClick, collapsed }) {
     </div>
   );
 }
-
 // ── Main Layout ───────────────────────────────────────────
 export default function Layout({ children, page, setPage, user, profil, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);

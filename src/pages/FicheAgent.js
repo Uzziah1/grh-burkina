@@ -12,13 +12,12 @@ import {
   generateAvance, generateCDI, generateCDD,
 } from '../lib/generatePDF';
 import {
-  ArrowLeft, FileText, Award, Palmtree,
+  ArrowLeft, FileText, Award,
   Clock, DollarSign, User, Phone, GraduationCap,
-  Briefcase, Download, AlertTriangle,
+  Briefcase, AlertTriangle, ChevronDown,
+  FileBadge, CalendarCheck, Wallet, Palmtree,
 } from 'lucide-react';
-import {ChevronDown,
-  FileBadge, CalendarCheck, CalendarOff, Wallet,
-} from 'lucide-react';
+
 
 // ── Toast notification ────────────────────────────────────
 function showToast(msg, type = 'success') {
