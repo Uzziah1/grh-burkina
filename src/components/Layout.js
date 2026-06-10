@@ -7,7 +7,7 @@ import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
   DollarSign, FolderOpen, Building2, UserCog,
-  LogOut, ChevronRight, ChevronLeft,
+  LogOut, ChevronRight, ChevronLeft, Banknote, History,
 } from 'lucide-react';
 
 // ── Navigation items ──────────────────────────────────────
@@ -16,9 +16,14 @@ const mainNavItems = [
   { id: 'agents',       label: 'Agents',           permission: 'voirAgents',       icon: Users },
   { id: 'contrats',     label: 'Contrats',         permission: 'voirContrats',     icon: FileText },
   { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
+  {
+  id: 'paie', label: 'Paie', permission: 'voirAvances', icon: Banknote,
+},
   { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
   { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
+  { id: 'historique', label: 'Journalisation', permission: 'voirAgents', icon: History },
 ];
+
 
 const settingsNavItems = [
   { id: 'utilisateurs', label: 'Utilisateurs',     permission: 'voirUtilisateurs', icon: UserCog },
@@ -31,8 +36,10 @@ const pageTitles = {
   agents:       'Gestion des agents',
   contrats:     'Suivi des contrats',
   conges:       'Congés',
+  paie: 'Bulletins de paie',
   avances:      'Avances sur salaire',
   documents:    'Documents',
+  historique: 'Journalisation',
   entreprise:   'Mon Entreprise',
   utilisateurs: 'Gestion des utilisateurs',
   fiche:        'Fiche agent',

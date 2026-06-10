@@ -12,6 +12,8 @@ import Documents from './pages/Documents';
 import Entreprise from './pages/Entreprise';
 import FicheAgent from './pages/FicheAgent';
 import Utilisateurs from './pages/Utilisateurs';
+import Paie from './pages/Paie';
+import Historique from './pages/Historique';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -71,7 +73,9 @@ export default function App() {
     contrats: <Contrats agents={agents} onOpenFiche={openFiche} />,
     conges: <Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} />,
     avances: <Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} />,
+    paie: <Paie agents={agents} onRefresh={loadData} profil={profil} />,
     documents: <Documents agents={agents} entreprise={entreprise} profil={profil} />,
+    historique: <Historique />,
     entreprise: <Entreprise onRefresh={loadData} />,
     fiche: <FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} profil={profil} />,
     utilisateurs: <Utilisateurs profil={profil} />,
