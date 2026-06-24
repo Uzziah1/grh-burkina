@@ -1,171 +1,238 @@
 // calcPaie.js - Burkina Faso payroll calculation engine
-// CNSS: 5.5% employee / 19.8% employer (capped at 800,000 FCFA)
-// IUTS: progressive tax brackets 1.8% to 27%
+// Logic replicated from AIMDIGITAL payroll Excel model (AZARIA sheet)
+//
+// Calculation order:
+// 1. Salaire brut = somme des éléments de rémunération
+// 2. CNSS salarié = 5.5% du brut, plafonné à 44 000 FCFA
+// 3. Contrôle CNSS fiscal = MIN(salaire_base x 8%, CNSS réelle)
+// 4. Salaire imposable IUTS = brut - contrôle fiscal (ou - CNSS réelle si plus petite)
+// 5. Exonérations sur indemnités (logement/transport/fonction), plafonnées
+// 6. Abattement forfaitaire = 25% du salaire de base
+// 7. Base IUTS = imposable - exonérations - abattement (arrondie à la centaine inférieure)
+// 8. IUTS brut = barème progressif par tranches
+// 9. Abattement charges familiales = % selon nombre de personnes à charge (max 7)
+// 10. Net IUTS = IUTS brut - abattement familial
+// 11. Salaire net avant déduction = brut - CNSS - Net IUTS - autres retenues
+// 12. Retenue 1% (effort de guerre) sur le salaire net avant déduction
+// 13. Salaire net = net avant déduction - retenue 1% - avance sur salaire
 
 // ── CNSS constants ────────────────────────────────────────
-const CNSS_SALARIAL    = 0.055;  // 5.5% employee contribution
-const CNSS_PATRONAL    = 0.198;  // 19.8% employer contribution
-const CNSS_PLAFOND     = 800000; // Monthly ceiling
+const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
+const CNSS_PLAFOND_MONTANT = 44000;   // Monthly cap on CNSS contribution (FCFA)
+const CNSS_FISCAL_TAUX     = 0.08;    // 8% control rate on base salary
+const CNSS_PATRONAL_TAUX   = 0.16;    // 16% employer contribution (from sheet H28)
 
-// ── IUTS tax brackets (monthly) ──────────────────────────
-// Format: { min, max, taux, deduction }
+// ── Exemption caps for allowances (used to compute taxable base) ──
+const EXO_LOGEMENT_TAUX   = 0.20;
+const EXO_LOGEMENT_PLAFOND = 75000;
+const EXO_TRANSPORT_TAUX   = 0.05;
+const EXO_TRANSPORT_PLAFOND = 30000;
+const EXO_FONCTION_TAUX    = 0.05;
+const EXO_FONCTION_PLAFOND = 50000;
+
+// ── Flat-rate allowance (abattement forfaitaire) ──────────
+const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
+
+// ── War effort withholding (retenue 1%) ───────────────────
+const RETENUE_EFFORT_GUERRE = 0.01;
+
+// ── IUTS progressive brackets (monthly taxable base) ──────
+// Replicated exactly from the AZARIA sheet (F3:G11)
 const IUTS_BAREME = [
-  { min: 0,       max: 15000,  taux: 0,     deduction: 0 },
-  { min: 15001,   max: 20000,  taux: 0.018, deduction: 270 },
-  { min: 20001,   max: 25000,  taux: 0.021, deduction: 330 },
-  { min: 25001,   max: 30000,  taux: 0.024, deduction: 405 },
-  { min: 30001,   max: 35000,  taux: 0.027, deduction: 495 },
-  { min: 35001,   max: 40000,  taux: 0.030, deduction: 600 },
-  { min: 40001,   max: 45000,  taux: 0.033, deduction: 720 },
-  { min: 45001,   max: 55000,  taux: 0.037, deduction: 900 },
-  { min: 55001,   max: 65000,  taux: 0.040, deduction: 1065 },
-  { min: 65001,   max: 80000,  taux: 0.045, deduction: 1390 },
-  { min: 80001,   max: 100000, taux: 0.050, deduction: 1790 },
-  { min: 100001,  max: 120000, taux: 0.055, deduction: 2290 },
-  { min: 120001,  max: 150000, taux: 0.060, deduction: 2890 },
-  { min: 150001,  max: 200000, taux: 0.065, deduction: 3640 },
-  { min: 200001,  max: 250000, taux: 0.070, deduction: 4640 },
-  { min: 250001,  max: 300000, taux: 0.090, deduction: 9640 },
-  { min: 300001,  max: 400000, taux: 0.100, deduction: 12640 },
-  { min: 400001,  max: 500000, taux: 0.120, deduction: 20640 },
-  { min: 500001,  max: 600000, taux: 0.150, deduction: 35640 },
-  { min: 600001,  max: 750000, taux: 0.190, deduction: 59640 },
-  { min: 750001,  max: Infinity, taux: 0.270, deduction: 119640 },
+  { plafond: 10000,     taux: 0     },
+  { plafond: 20000,     taux: 0     },
+  { plafond: 30000,     taux: 0     },
+  { plafond: 50000,     taux: 0.121 },
+  { plafond: 80000,     taux: 0.139 },
+  { plafond: 120000,    taux: 0.157 },
+  { plafond: 170000,    taux: 0.184 },
+  { plafond: 250000,    taux: 0.217 },
+  { plafond: Infinity,  taux: 0.25  },
 ];
 
-// ── Abattements pour charges de famille ──────────────────
-// Parts: 1 = célibataire, 1.5 = marié sans enfant, +0.5 par enfant
-const ABATTEMENTS = {
-  1:   0,
-  1.5: 0.10,  // 10% reduction
-  2:   0.15,
-  2.5: 0.20,
-  3:   0.25,
-  3.5: 0.25,
-  4:   0.25,
+// ── Family charge abatement rates (D38 in sheet) ──────────
+// Index = number of dependents (1 spouse + up to 6 children = max 7)
+const ABATTEMENT_CHARGES = {
+  0: 0,
+  1: 0.08,
+  2: 0.10,
+  3: 0.12,
+  4: 0.14,
+  5: 0.16,
+  6: 0.18,
+  7: 0.20, // 7 and above
 };
 
-// ── Calculate CNSS employee contribution ─────────────────
+// ── Maximum number of dependent children for abatement ────
+export const MAX_ENFANTS_CHARGE = 6;
+
+// ── Calculate number of dependents for IUTS abatement ─────
+// 1 dependent for spouse (if married) + up to 6 children
+export function calculerPersonnesACharge(situationMatrimoniale, nombreEnfants = 0) {
+  let charges = 0;
+  if (situationMatrimoniale === 'Marié(e)') charges += 1;
+  charges += Math.min(parseInt(nombreEnfants) || 0, MAX_ENFANTS_CHARGE);
+  return Math.min(charges, 7);
+}
+
+// ── Calculate CNSS employee contribution (capped) ─────────
 export function calculerCNSS(salaireBrut) {
-  const base = Math.min(salaireBrut, CNSS_PLAFOND);
-  return Math.round(base * CNSS_SALARIAL);
+  const brut = parseFloat(salaireBrut) || 0;
+  const cnss = brut * CNSS_TAUX;
+  return Math.round(Math.min(cnss, CNSS_PLAFOND_MONTANT));
 }
 
-// ── Calculate CNSS employer contribution ─────────────────
+// ── Calculate employer CNSS contribution ──────────────────
 export function calculerCNSSPatronal(salaireBrut) {
-  const base = Math.min(salaireBrut, CNSS_PLAFOND);
-  return Math.round(base * CNSS_PATRONAL);
+  const brut = parseFloat(salaireBrut) || 0;
+  return Math.round(brut * CNSS_PATRONAL_TAUX);
 }
 
-// ── Calculate IUTS from net taxable salary ───────────────
-export function calculerIUTS(revenuImposable, nombreParts = 1) {
-  if (revenuImposable <= 0) return 0;
+// ── Calculate progressive IUTS from taxable base ──────────
+// Cumulative bracket calculation, exactly as the Excel nested IF (D36)
+export function calculerIUTSBrut(baseIUTS) {
+  const base = Math.max(0, parseFloat(baseIUTS) || 0);
+  let impot = 0;
+  let plafondPrecedent = 0;
 
-  // Round down to nearest 1000
-  const base = Math.floor(revenuImposable / 1000) * 1000;
-
-  // Find applicable bracket
-  const tranche = IUTS_BAREME.find(t => base >= t.min && base <= t.max);
-  if (!tranche || tranche.taux === 0) return 0;
-
-  // Calculate gross IUTS
-  let iutsBrut = Math.round(base * tranche.taux - tranche.deduction);
-  if (iutsBrut < 0) iutsBrut = 0;
-
-  // Apply family charge reduction
-  const tauxAbattement = ABATTEMENTS[nombreParts] || 0;
-  const iutsNet = Math.round(iutsBrut * (1 - tauxAbattement));
-
-  return iutsNet;
+  for (const tranche of IUTS_BAREME) {
+    if (base <= tranche.plafond) {
+      impot += (base - plafondPrecedent) * tranche.taux;
+      break;
+    } else {
+      impot += (tranche.plafond - plafondPrecedent) * tranche.taux;
+      plafondPrecedent = tranche.plafond;
+    }
+  }
+  return Math.round(impot);
 }
 
-// ── Calculate number of family parts ─────────────────────
-export function calculerNombreParts(situationMatrimoniale, nombreEnfants = 0) {
-  let parts = 1; // Single base
-  if (situationMatrimoniale === 'Marié(e)') parts += 0.5;
-  parts += Math.min(nombreEnfants, 6) * 0.5;
-  return parts;
+// ── Calculate family charge abatement on gross IUTS ───────
+export function calculerAbattementFamilial(iutsBrut, personnesACharge) {
+  const taux = ABATTEMENT_CHARGES[Math.min(personnesACharge, 7)] || 0;
+  return Math.round(iutsBrut * taux);
 }
 
-// ── Full payroll calculation ──────────────────────────────
+// ── Full payroll calculation — replicates AZARIA sheet ────
 export function calculerBulletin(data) {
   const {
-    salaire_base        = 0,
-    sursalaire          = 0,
-    indemnite_logement  = 0,
-    indemnite_transport = 0,
-    indemnite_fonction  = 0,
-    prime_anciennete    = 0,
-    autres_primes       = 0,
-    heures_sup          = 0,
-    nombre_parts        = 1,
+    salaire_base         = 0,
+    sursalaire            = 0,
+    indemnite_logement    = 0,
+    indemnite_transport   = 0,
+    indemnite_fonction    = 0,
+    prime_anciennete      = 0,
+    autres_primes         = 0,
+    heures_sup            = 0,
+    autres_retenues       = 0,
+    avance_salaire        = 0,
+    situation_matrimoniale = 'Célibataire',
+    nombre_enfants        = 0,
   } = data;
 
-  // ── Step 1: Gross salary ──
+  const sBase       = parseFloat(salaire_base) || 0;
+  const sSursalaire = parseFloat(sursalaire) || 0;
+  const sLogement   = parseFloat(indemnite_logement) || 0;
+  const sTransport  = parseFloat(indemnite_transport) || 0;
+  const sFonction   = parseFloat(indemnite_fonction) || 0;
+  const sAnciennete = parseFloat(prime_anciennete) || 0;
+  const sAutresPrimes = parseFloat(autres_primes) || 0;
+  const sHeuresSup  = parseFloat(heures_sup) || 0;
+  const sAutresRetenues = parseFloat(autres_retenues) || 0;
+  const sAvance     = parseFloat(avance_salaire) || 0;
+
+  // ── Step 1: Salaire brut (D23) ──
   const salaire_brut = Math.round(
-    parseFloat(salaire_base)        +
-    parseFloat(sursalaire)          +
-    parseFloat(indemnite_logement)  +
-    parseFloat(indemnite_transport) +
-    parseFloat(indemnite_fonction)  +
-    parseFloat(prime_anciennete)    +
-    parseFloat(autres_primes)       +
-    parseFloat(heures_sup)
+    sBase + sSursalaire + sLogement + sTransport +
+    sFonction + sAnciennete + sAutresPrimes + sHeuresSup
   );
 
-  // ── Step 2: CNSS employee deduction ──
+  // ── Step 2: CNSS salarié, plafonné à 44 000 (D24) ──
   const cnss_salarial = calculerCNSS(salaire_brut);
 
-  // ── Step 3: Net taxable income for IUTS ──
-  // Exonerate transport and part of housing/function
-  const exoneration_transport = Math.min(
-    parseFloat(indemnite_transport), 25000
-  );
-  const exoneration_logement = Math.min(
-    parseFloat(indemnite_logement) * 0.20,
-    75000
-  );
-  const exoneration_fonction = Math.min(
-    parseFloat(indemnite_fonction) * 0.05,
-    50000
+  // ── Step 3: Contrôle CNSS fiscal = MIN(base x 8%, CNSS réelle) (D26) ──
+  const controle_cnss_fiscal = Math.round(Math.min(sBase * CNSS_FISCAL_TAUX, cnss_salarial));
+
+  // ── Step 4: Salaire imposable IUTS (D27) ──
+  // = brut - contrôle fiscal (si contrôle <= CNSS réelle, sinon brut - CNSS réelle)
+  const salaire_imposable_iuts = Math.round(
+    controle_cnss_fiscal <= cnss_salarial
+      ? salaire_brut - controle_cnss_fiscal
+      : salaire_brut - cnss_salarial
   );
 
-  const salaire_brut_imposable = Math.round(
-    salaire_brut
-    - cnss_salarial
-    - exoneration_transport
-    - exoneration_logement
-    - exoneration_fonction
+  // ── Step 5: Exonérations sur indemnités (D29:D31) ──
+  const exo_logement_calc  = Math.min(salaire_imposable_iuts * EXO_LOGEMENT_TAUX, EXO_LOGEMENT_PLAFOND);
+  const exo_logement       = Math.round(Math.min(exo_logement_calc, sLogement));
+
+  const exo_transport_calc = Math.min(salaire_imposable_iuts * EXO_TRANSPORT_TAUX, EXO_TRANSPORT_PLAFOND);
+  const exo_transport      = Math.round(Math.min(exo_transport_calc, sTransport));
+
+  const exo_fonction_calc  = Math.min(salaire_imposable_iuts * EXO_FONCTION_TAUX, EXO_FONCTION_PLAFOND);
+  const exo_fonction       = Math.round(Math.min(exo_fonction_calc, sFonction));
+
+  const total_exonerations = exo_logement + exo_transport + exo_fonction;
+
+  // ── Step 6: Abattement forfaitaire = 25% du salaire de base (D33) ──
+  const abattement_forfaitaire = Math.round(sBase * ABATTEMENT_FORFAITAIRE_TAUX);
+
+  // ── Step 7: Base IUTS, arrondie à la centaine inférieure (D34) ──
+  const baseIutsRaw = salaire_imposable_iuts - total_exonerations - abattement_forfaitaire;
+  const base_iuts = Math.floor(Math.max(0, baseIutsRaw) / 100) * 100;
+
+  // ── Step 8: IUTS brut via barème progressif (D36) ──
+  const iuts_brut = calculerIUTSBrut(base_iuts);
+
+  // ── Step 9: Personnes à charge + abattement familial (D37/D38) ──
+  const personnes_a_charge = calculerPersonnesACharge(situation_matrimoniale, nombre_enfants);
+  const abattement_familial = calculerAbattementFamilial(iuts_brut, personnes_a_charge);
+
+  // ── Step 10: Net IUTS (D39) ──
+  const iuts = Math.max(0, iuts_brut - abattement_familial);
+
+  // ── Step 11: Salaire net avant déduction (D41) ──
+  const salaire_net_avant_deduction = Math.ceil(
+    salaire_brut - cnss_salarial - iuts - sAutresRetenues
   );
 
-  // ── Step 4: IUTS calculation ──
-  const iuts = calculerIUTS(
-    Math.max(0, salaire_brut_imposable),
-    parseFloat(nombre_parts)
+  // ── Step 12: Retenue 1% effort de guerre (D42) ──
+  const retenue_effort_guerre = Math.round(salaire_net_avant_deduction * RETENUE_EFFORT_GUERRE);
+
+  // ── Step 13: Salaire net final (D44) ──
+  const salaire_net = Math.round(
+    salaire_net_avant_deduction - retenue_effort_guerre - sAvance
   );
 
-  // ── Step 5: Total deductions ──
-  const total_retenues = cnss_salarial + iuts;
-
-  // ── Step 6: Net salary ──
-  const salaire_net = Math.round(salaire_brut - total_retenues);
-
-  // ── Step 7: Employer CNSS ──
+  // ── Employer contribution ──
   const cnss_patronal = calculerCNSSPatronal(salaire_brut);
 
   return {
     salaire_brut,
     cnss_salarial,
-    salaire_brut_imposable: Math.max(0, salaire_brut_imposable),
+    controle_cnss_fiscal,
+    salaire_brut_imposable: salaire_imposable_iuts,
+    exo_logement,
+    exo_transport,
+    exo_fonction,
+    total_exonerations,
+    abattement_forfaitaire,
+    base_iuts,
+    iuts_brut,
+    personnes_a_charge,
+    abattement_familial,
     iuts,
-    total_retenues,
+    total_retenues: cnss_salarial + iuts,
+    salaire_net_avant_deduction,
+    retenue_effort_guerre,
+    avance_salaire: sAvance,
     salaire_net,
     cnss_patronal,
+    nombre_parts: personnes_a_charge, // kept for compatibility with display code
   };
 }
 
 // ── Format FCFA amount ────────────────────────────────────
 export function formatFCFA(montant) {
-  if (!montant && montant !== 0) return '—';
+  if (montant === null || montant === undefined || isNaN(montant)) return '—';
   return Math.round(montant).toLocaleString('fr-FR') + ' FCFA';
 }

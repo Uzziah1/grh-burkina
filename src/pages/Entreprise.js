@@ -1,5 +1,5 @@
 // Entreprise.js - Company information management page
-// Features: sticky header, company details, logo upload, preview tab
+// Features: sticky header, company details, logo upload, signature mention, preview tab
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -31,6 +31,7 @@ const EMPTY_FORM = {
   ifu: '', cnss_employeur: '', representant: '',
   qualite_representant: '', telephone: '', email: '',
   bp: '', ville: 'Ouagadougou', logo_url: '',
+  mention_signataire: '', pied_de_page: '',
 };
 
 // ── Section card component ────────────────────────────────
@@ -335,6 +336,22 @@ export default function Entreprise({ onRefresh }) {
                     placeholder="Ex: Directeur Général"
                   />
                 </div>
+                <div className="form-group full">
+                  <label>Mention sous la signature (optionnel)</label>
+                  <input
+                    value={form.mention_signataire}
+                    onChange={e => setF('mention_signataire', e.target.value)}
+                    placeholder="Ex: Chevalier de l'Ordre de l'Étalon"
+                  />
+                </div>
+                <div className="form-group full">
+                  <label>Pied de page des documents (optionnel)</label>
+                  <input
+                    value={form.pied_de_page}
+                    onChange={e => setF('pied_de_page', e.target.value)}
+                    placeholder="Ex: Mode de règlement / Mentions légales..."
+                  />
+                </div>
               </div>
             </SectionCard>
 
@@ -462,20 +479,40 @@ export default function Entreprise({ onRefresh }) {
                     marginTop: 20,
                     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20,
                   }}>
-                    {['L\'EMPLOYEUR', 'L\'EMPLOYÉ(E)'].map(label => (
-                      <div key={label} style={{ textAlign: 'center' }}>
+                    {[
+                      { label: 'L\'EMPLOYEUR', mention: form.mention_signataire },
+                      { label: 'L\'EMPLOYÉ(E)', mention: null },
+                    ].map(sig => (
+                      <div key={sig.label} style={{ textAlign: 'center' }}>
                         <div style={{
                           fontSize: 11, fontWeight: 700, color: '#003366',
-                          fontFamily: 'Poppins, sans-serif', marginBottom: 28,
+                          fontFamily: 'Poppins, sans-serif', marginBottom: 6,
                         }}>
-                          {label}
+                          {sig.label}
                         </div>
+                        {sig.mention && (
+                          <div style={{ fontSize: 9, color: '#A3A3A3', fontStyle: 'italic', marginBottom: 18 }}>
+                            {sig.mention}
+                          </div>
+                        )}
+                        {!sig.mention && <div style={{ marginBottom: 28 }} />}
                         <div style={{ borderTop: '1px solid #333', paddingTop: 4 }}>
                           <span style={{ fontSize: 10, color: '#A3A3A3' }}>Signature</span>
                         </div>
                       </div>
                     ))}
                   </div>
+
+                  {form.pied_de_page && (
+                    <div style={{
+                      marginTop: 20, paddingTop: 12,
+                      borderTop: '1px solid #E5E5E5',
+                      fontSize: 10, color: '#A3A3A3',
+                      textAlign: 'center', fontStyle: 'italic',
+                    }}>
+                      {form.pied_de_page}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
