@@ -1,15 +1,13 @@
 // Documents.js - Document generation page
-// Features: agent selection, PDF generation for all document types
+// Features: agent selection, PDF generation (CDI, CDD, Attestation only)
 
 import React, { useState } from 'react';
 import {
-  generateAttestation, generateConge, generateAbsence,
-  generateAvance, generateCDI, generateCDD,
+  generateAttestation, generateCDI, generateCDD,
 } from '../lib/generatePDF';
 import {
-  Search, Download, FileText, Award,
-  CalendarCheck, CalendarOff, Wallet, AlertCircle,
-  ChevronRight, User,
+  Download, FileText, Award,
+  AlertCircle, ChevronRight, User,
 } from 'lucide-react';
 
 // ── Toast notification ────────────────────────────────────
@@ -52,27 +50,6 @@ const DOC_TYPES = [
     icon:  Award,
     color: '#16A34A',
   },
-  {
-    type:  'conge',
-    titre: 'Autorisation de congé',
-    desc:  'Validation des congés payés',
-    icon:  CalendarCheck,
-    color: '#8B5CF6',
-  },
-  {
-    type:  'absence',
-    titre: 'Autorisation d\'absence',
-    desc:  'Absence ponctuelle',
-    icon:  CalendarOff,
-    color: '#EC4899',
-  },
-  {
-    type:  'avance',
-    titre: 'Avance sur salaire',
-    desc:  'Demande d\'avance sur salaire',
-    icon:  Wallet,
-    color: '#E8920A',
-  },
 ];
 
 // ── Document card component ───────────────────────────────
@@ -110,7 +87,6 @@ function DocCard({ doc, onClick, disabled }) {
         }
       }}
     >
-      {/* Icon */}
       <div style={{
         width: 52, height: 52, borderRadius: 14,
         background: `${doc.color}15`,
@@ -119,7 +95,6 @@ function DocCard({ doc, onClick, disabled }) {
         <Icon size={24} color={doc.color} strokeWidth={1.8} />
       </div>
 
-      {/* Title */}
       <div>
         <div style={{
           fontSize: 13, fontWeight: 700, color: '#0F0F0F',
@@ -132,7 +107,6 @@ function DocCard({ doc, onClick, disabled }) {
         </div>
       </div>
 
-      {/* Download label */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 4,
         fontSize: 11, fontWeight: 600,
@@ -149,14 +123,7 @@ function DocCard({ doc, onClick, disabled }) {
 // ── Main Documents component ──────────────────────────────
 export default function Documents({ agents, entreprise }) {
   const [selectedAgent, setSelectedAgent] = useState('');
-  const [search, setSearch] = useState('');
   const [generating, setGenerating] = useState(null);
-
-  // ── Filter agents by search ──
-  const filtered = agents.filter(a => {
-    const name = `${a.prenom} ${a.nom}`.toLowerCase();
-    return name.includes(search.toLowerCase());
-  });
 
   const agent = agents.find(a => a.id === selectedAgent);
 
@@ -172,12 +139,9 @@ export default function Documents({ agents, entreprise }) {
     }
     setGenerating(type);
     try {
-      if (type === 'cdi')         await generateCDI(agent, entreprise);
-      else if (type === 'cdd')    await generateCDD(agent, entreprise);
+      if (type === 'cdi')              await generateCDI(agent, entreprise);
+      else if (type === 'cdd')         await generateCDD(agent, entreprise);
       else if (type === 'attestation') await generateAttestation(agent, entreprise);
-      else if (type === 'conge')  await generateConge(agent, entreprise);
-      else if (type === 'absence') await generateAbsence(agent, entreprise);
-      else if (type === 'avance') await generateAvance(agent, entreprise);
       showToast('PDF généré et téléchargé avec succès');
     } catch (e) {
       showToast('Erreur lors de la génération du PDF', 'error');
@@ -222,38 +186,20 @@ export default function Documents({ agents, entreprise }) {
             Sélectionnez un agent pour générer ses documents administratifs en PDF.
           </p>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-
-            {/* Search */}
-            <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-              <Search size={15} style={{
-                position: 'absolute', left: 12, top: '50%',
-                transform: 'translateY(-50%)', color: '#A3A3A3',
-              }} />
-              <input
-                className="search-input"
-                placeholder="Rechercher un agent..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ paddingLeft: 36, width: '100%' }}
-              />
-            </div>
-
-            {/* Agent select */}
-            <select
-              className="filter-select"
-              value={selectedAgent}
-              onChange={e => setSelectedAgent(e.target.value)}
-              style={{ flex: 2, minWidth: 200 }}
-            >
-              <option value="">— Sélectionner un agent —</option>
-              {filtered.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.prenom} {a.nom} — {a.poste} ({a.type_contrat})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Agent select */}
+          <select
+            className="filter-select"
+            value={selectedAgent}
+            onChange={e => setSelectedAgent(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <option value="">— Sélectionner un agent —</option>
+            {agents.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.prenom} {a.nom} — {a.poste} ({a.type_contrat})
+              </option>
+            ))}
+          </select>
 
           {/* Selected agent info */}
           {agent && (

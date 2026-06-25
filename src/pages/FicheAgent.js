@@ -8,33 +8,11 @@ import {
   getInitials, avatarColor, joursRestants,
 } from '../lib/helpers';
 import {
-  generateAttestation, generateConge, generateAbsence,
-  generateAvance, generateCDI, generateCDD,
-} from '../lib/generatePDF';
-import {
   ArrowLeft, FileText, Award,
   Clock, DollarSign, User, Phone, GraduationCap,
   Briefcase, AlertTriangle, ChevronDown,
-  FileBadge, CalendarCheck, Wallet, Palmtree,
+  Palmtree,
 } from 'lucide-react';
-
-
-// ── Toast notification ────────────────────────────────────
-function showToast(msg, type = 'success') {
-  const colors = { success: '#16A34A', error: '#DC2626', warning: '#D97706' };
-  const t = document.createElement('div');
-  t.style.cssText = `
-    position:fixed; bottom:24px; right:24px;
-    background:${colors[type] || colors.success};
-    color:#fff; padding:12px 20px; border-radius:10px;
-    font-size:13px; font-weight:600; z-index:9999;
-    font-family:Poppins,sans-serif;
-    box-shadow:0 4px 16px rgba(0,0,0,0.15);
-  `;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
-}
 
 // ── Info row component ────────────────────────────────────
 function InfoRow({ label, value }) {
@@ -87,20 +65,6 @@ function SectionCard({ title, icon: Icon, children, defaultOpen = true }) {
   );
 }
 
-// ── Quick action button ───────────────────────────────────
-function QuickAction({ label, icon: Icon, onClick }) {
-  return (
-    <button
-      className="btn btn-secondary btn-sm"
-      onClick={onClick}
-      style={{ fontSize: 12, justifyContent: 'flex-start' }}
-    >
-      <Icon size={14} strokeWidth={2} />
-      {label}
-    </button>
-  );
-}
-
 // ── Main FicheAgent component ─────────────────────────────
 export default function FicheAgent({ agentId, entreprise, onBack }) {
   const [agent, setAgent] = useState(null);
@@ -129,25 +93,6 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
     setConges(cg.data || []);
     setAvances(av.data || []);
     setLoading(false);
-  }
-
-  // ── Generate PDF document ──
-  async function generateDoc(type) {
-    if (!entreprise || !entreprise.nom) {
-      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
-      return;
-    }
-    try {
-      if (type === 'cdi')         await generateCDI(agent, entreprise);
-      else if (type === 'cdd')    await generateCDD(agent, entreprise);
-      else if (type === 'attestation') await generateAttestation(agent, entreprise);
-      else if (type === 'conge')  await generateConge(agent, entreprise);
-      else if (type === 'absence') await generateAbsence(agent, entreprise);
-      else if (type === 'avance') await generateAvance(agent, entreprise);
-      showToast('PDF généré et téléchargé');
-    } catch (e) {
-      showToast('Erreur lors de la génération', 'error');
-    }
   }
 
   // ── Compute leave balance ──
@@ -285,20 +230,6 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
               </div>
             </div>
 
-            {/* Quick actions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-              <div style={{ fontSize: 11, color: '#A3A3A3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
-                Documents rapides
-              </div>
-              <QuickAction label="Attestation"    icon={FileBadge}    onClick={() => generateDoc('attestation')} />
-                <QuickAction
-                label={agent.type_contrat === 'CDI' ? 'Contrat CDI' : 'Contrat CDD'}
-                icon={FileText}
-                onClick={() => generateDoc(agent.type_contrat === 'CDI' ? 'cdi' : 'cdd')}
-                />
-                <QuickAction label="Congé"  icon={CalendarCheck} onClick={() => generateDoc('conge')} />
-                <QuickAction label="Avance" icon={Wallet}         onClick={() => generateDoc('avance')} />
-            </div>
           </div>
         </div>
       </div>

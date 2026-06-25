@@ -13,7 +13,7 @@ import {
   CalendarCheck, CalendarOff, Wallet,
 } from 'lucide-react';
 import {
-  generateAttestation, generateConge, generateAbsence,
+  generateAttestation, generateConge,
   generateAvance, generateCDI, generateCDD,
 } from '../lib/generatePDF';
 
@@ -179,7 +179,6 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       else if (type === 'cdd')     await generateCDD(a, entreprise);
       else if (type === 'attestation') await generateAttestation(a, entreprise);
       else if (type === 'conge')   await generateConge(a, entreprise);
-      else if (type === 'absence') await generateAbsence(a, entreprise);
       else if (type === 'avance')  await generateAvance(a, entreprise);
       showToast('PDF généré et téléchargé');
       setDocModal(null);

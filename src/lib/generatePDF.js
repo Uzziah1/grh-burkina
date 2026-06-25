@@ -182,7 +182,7 @@ export async function generateAttestation(agent, entreprise) {
   doc.save(`attestation_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export async function generateConge(agent, entreprise) {
+export async function generateConge(agent, entreprise, demande = {}) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
@@ -197,11 +197,16 @@ export async function generateConge(agent, entreprise) {
   y = champ(doc, 'Département', agent.departement || '', 110, y - 12, 85);
 
   y = sectionTitle(doc, 'DÉTAILS DU CONGÉ', y);
-  y = champ(doc, 'Date de début', '', 14, y, 85);
-  y = champ(doc, 'Date de fin', '', 110, y - 12, 85);
-  y = champ(doc, 'Nombre de jours ouvrables', '', 14, y, 85);
-  y = champ(doc, 'Motif', 'Congé annuel payé', 110, y - 12, 85);
-  y = champ(doc, 'Date de reprise prévue', '', 14, y, 182);
+  const dateDebut = demande.date_debut ? new Date(demande.date_debut).toLocaleDateString('fr-FR') : '';
+  const dateFin   = demande.date_fin ? new Date(demande.date_fin).toLocaleDateString('fr-FR') : '';
+  y = champ(doc, 'Date de début', dateDebut, 14, y, 85);
+  y = champ(doc, 'Date de fin', dateFin, 110, y - 12, 85);
+  y = champ(doc, 'Nombre de jours ouvrables', demande.nombre_jours ? String(demande.nombre_jours) : '', 14, y, 85);
+  y = champ(doc, 'Motif', demande.motif || 'Congé annuel payé', 110, y - 12, 85);
+  const dateReprise = demande.date_fin
+    ? new Date(new Date(demande.date_fin).getTime() + 86400000).toLocaleDateString('fr-FR')
+    : '';
+  y = champ(doc, 'Date de reprise prévue', dateReprise, 14, y, 182);
 
   y += 4;
   y = texte(doc, `Nous soussignés, ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'} de la société ${entreprise.nom || '___'}, autorisons par la présente Monsieur / Madame ${agent.prenom} ${agent.nom} à bénéficier du congé mentionné ci-dessus.`, 14, y, 182);
@@ -214,37 +219,7 @@ export async function generateConge(agent, entreprise) {
   doc.save(`conge_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export async function generateAbsence(agent, entreprise) {
-  const doc = new jsPDF();
-  const today = new Date().toLocaleDateString('fr-FR');
-
-  await entete(doc, entreprise);
-  let y = 35;
-  y = titrePrincipal(doc, 'AUTORISATION D\'ABSENCE', y);
-
-  y = sectionTitle(doc, 'INFORMATIONS SUR L\'AGENT', y);
-  y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 85);
-  y = champ(doc, 'Matricule', agent.matricule || '', 110, y - 12, 85);
-  y = champ(doc, 'Poste', agent.poste || '', 14, y, 85);
-  y = champ(doc, 'Département', agent.departement || '', 110, y - 12, 85);
-
-  y = sectionTitle(doc, 'DÉTAILS DE L\'ABSENCE', y);
-  y = champ(doc, 'Date', '', 14, y, 85);
-  y = champ(doc, 'Heure de départ', '', 110, y - 12, 85);
-  y = champ(doc, 'Heure de retour', '', 14, y, 85);
-  y = champ(doc, 'Motif', '', 110, y - 12, 85);
-
-  y += 4;
-  y = texte(doc, 'Cette autorisation est accordée à titre exceptionnel et ne saurait constituer un précédent.', 14, y, 182);
-  y += 6;
-  doc.setFontSize(9);
-  doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
-  signatures(doc, y + 6, entreprise);
-  piedPage(doc, today);
-  doc.save(`absence_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
-}
-
-export async function generateAvance(agent, entreprise) {
+export async function generateAvance(agent, entreprise, demande = {}) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
@@ -260,13 +235,11 @@ export async function generateAvance(agent, entreprise) {
   y = champ(doc, 'Salaire brut mensuel', agent.salaire_brut ? parseInt(agent.salaire_brut).toLocaleString('fr-FR') + ' FCFA' : '', 14, y, 182);
 
   y = sectionTitle(doc, 'DÉTAILS DE LA DEMANDE', y);
-  y = champ(doc, 'Montant demandé (FCFA)', '', 14, y, 85);
-  y = champ(doc, 'Montant en lettres', '', 110, y - 12, 85);
-  y = champ(doc, 'Motif', '', 14, y, 182);
-
-  y = sectionTitle(doc, 'MODALITÉS DE REMBOURSEMENT', y);
-  y = champ(doc, 'Mois 1 (FCFA)', '', 14, y, 85);
-  y = champ(doc, 'Mois 2 (FCFA)', '', 110, y - 12, 85);
+  const montant = demande.montant ? parseInt(demande.montant).toLocaleString('fr-FR') + ' FCFA' : '';
+  const dateDemande = demande.date_demande ? new Date(demande.date_demande).toLocaleDateString('fr-FR') : today;
+  y = champ(doc, 'Montant demandé', montant, 14, y, 85);
+  y = champ(doc, 'Date de la demande', dateDemande, 110, y - 12, 85);
+  y = champ(doc, 'Motif', demande.motif || '', 14, y, 182);
 
   y += 4;
   doc.setFontSize(9);

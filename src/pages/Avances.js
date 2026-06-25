@@ -1,5 +1,5 @@
 // Avances.js - Salary advance management page
-// Features: advance requests, approval/rejection, total tracking
+// Features: advance requests, approval/rejection, total tracking, PDF generation
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -7,8 +7,9 @@ import { formatDate, formatMontant, getInitials, avatarColor } from '../lib/help
 import { peutFaire } from '../lib/useProfil';
 import {
   DollarSign, Plus, Check, X, Trash2,
-  Clock, CheckCircle, Search, TrendingUp,
+  Clock, CheckCircle, Search, TrendingUp, FileText,
 } from 'lucide-react';
+import { generateAvance } from '../lib/generatePDF';
 
 // ── Toast notification ────────────────────────────────────
 function showToast(msg, type = 'success') {
@@ -28,7 +29,7 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Main Avances component ────────────────────────────────
-export default function Avances({ avances, agents, onRefresh, profil }) {
+export default function Avances({ avances, agents, onRefresh, profil, entreprise }) {
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
@@ -40,6 +41,22 @@ export default function Avances({ avances, agents, onRefresh, profil }) {
   const [loading, setLoading] = useState(false);
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
+
+  // ── Generate advance request PDF ──
+  async function handleGenerateDoc(avance) {
+    const agent = agents.find(a => a.id === avance.agent_id);
+    if (!agent) { showToast('Agent introuvable', 'error'); return; }
+    if (!entreprise || !entreprise.nom) {
+      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      return;
+    }
+    try {
+      await generateAvance(agent, entreprise, avance);
+      showToast('Document généré et téléchargé');
+    } catch (e) {
+      showToast('Erreur lors de la génération', 'error');
+    }
+  }
 
   // ── Filter advances ──
   const filtered = avances.filter(a => {
@@ -195,71 +212,77 @@ export default function Avances({ avances, agents, onRefresh, profil }) {
                     Aucune demande d'avance
                   </td>
                 </tr>
-              ) : filtered.map(a => {
-                const av = avatarColor(a.agents?.nom || '');
-                return (
-                  <tr key={a.id}>
+              ) : filtered.map(a => (
+                <tr key={a.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="avatar" style={{
+                        background: avatarColor(a.agents?.nom || '').bg,
+                        color: avatarColor(a.agents?.nom || '').fg,
+                      }}>
+                        {getInitials(a.agents?.nom, a.agents?.prenom)}
+                      </div>
+                      <span style={{ fontWeight: 600, color: '#0F0F0F' }}>
+                        {a.agents ? `${a.agents.prenom} ${a.agents.nom}` : 'Agent inconnu'}
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: 700, fontSize: 14, color: '#0F0F0F' }}>{formatMontant(a.montant)}</td>
+                  <td style={{ color: '#737373' }}>{formatDate(a.date_demande)}</td>
+                  <td style={{ color: '#404040' }}>{a.motif || '—'}</td>
+                  <td>
+                    <span className={`badge ${
+                      a.statut === 'Approuvé' ? 'badge-green' :
+                      a.statut === 'Refusé'   ? 'badge-red'   : 'badge-orange'
+                    }`}>
+                      {a.statut}
+                    </span>
+                  </td>
+                  {peutFaire(profil, 'modifierAvances') && (
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: av.bg, color: av.fg }}>
-                          {getInitials(a.agents?.nom, a.agents?.prenom)}
-                        </div>
-                        <span style={{ fontWeight: 600, color: '#0F0F0F' }}>
-                          {a.agents?.prenom} {a.agents?.nom}
-                        </span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {a.statut === 'En attente' && (
+                          <>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ color: '#16A34A', borderColor: '#16A34A' }}
+                              onClick={() => updateStatut(a.id, 'Approuvé')}
+                              title="Approuver"
+                            >
+                              <Check size={13} />
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ color: '#DC2626', borderColor: '#DC2626' }}
+                              onClick={() => updateStatut(a.id, 'Refusé')}
+                              title="Refuser"
+                            >
+                              <X size={13} />
+                            </button>
+                          </>
+                        )}
+                        {a.statut === 'Approuvé' && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ color: '#2563EB', borderColor: '#2563EB' }}
+                            onClick={() => handleGenerateDoc(a)}
+                            title="Générer le document de demande d'avance"
+                          >
+                            <FileText size={13} />
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDelete(a.id)}
+                          title="Supprimer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </td>
-                    <td>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#0F0F0F' }}>
-                        {formatMontant(a.montant)}
-                      </span>
-                    </td>
-                    <td style={{ color: '#737373' }}>{formatDate(a.date_demande)}</td>
-                    <td style={{ color: '#404040' }}>{a.motif || '—'}</td>
-                    <td>
-                      <span className={`badge ${
-                        a.statut === 'Approuvé' ? 'badge-green' :
-                        a.statut === 'Refusé'   ? 'badge-red'   : 'badge-orange'
-                      }`}>
-                        {a.statut}
-                      </span>
-                    </td>
-                    {peutFaire(profil, 'modifierAvances') && (
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {a.statut === 'En attente' && (
-                            <>
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                style={{ color: '#16A34A', borderColor: '#16A34A' }}
-                                onClick={() => updateStatut(a.id, 'Approuvé')}
-                                title="Approuver"
-                              >
-                                <Check size={13} />
-                              </button>
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                style={{ color: '#DC2626', borderColor: '#DC2626' }}
-                                onClick={() => updateStatut(a.id, 'Refusé')}
-                                title="Refuser"
-                              >
-                                <X size={13} />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleDelete(a.id)}
-                            title="Supprimer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

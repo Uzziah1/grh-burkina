@@ -1,13 +1,14 @@
 // Conges.js - Leave management page
-// Features: leave requests, approval/rejection, leave balance tracking
+// Features: leave requests, approval/rejection, PDF authorization generation
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate, getInitials, avatarColor } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
+import { generateConge } from '../lib/generatePDF';
 import {
   Calendar, Plus, Check, X, Trash2,
-  Clock, CheckCircle, XCircle, Search,
+  Clock, CheckCircle, XCircle, Search, FileText,
 } from 'lucide-react';
 
 // ── Toast notification ────────────────────────────────────
@@ -28,7 +29,7 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Main Conges component ─────────────────────────────────
-export default function Conges({ conges, agents, onRefresh, profil }) {
+export default function Conges({ conges, agents, onRefresh, profil, entreprise }) {
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
@@ -39,6 +40,22 @@ export default function Conges({ conges, agents, onRefresh, profil }) {
   const [loading, setLoading] = useState(false);
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
+
+  // ── Generate leave authorization PDF ──
+  async function handleGenerateDoc(conge) {
+    const agent = agents.find(a => a.id === conge.agent_id);
+    if (!agent) { showToast('Agent introuvable', 'error'); return; }
+    if (!entreprise || !entreprise.nom) {
+      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      return;
+    }
+    try {
+      await generateConge(agent, entreprise, conge);
+      showToast('Document généré et téléchargé');
+    } catch (e) {
+      showToast('Erreur lors de la génération', 'error');
+    }
+  }
 
   // ── Filter leave requests ──
   const filtered = conges.filter(c => {
@@ -236,6 +253,16 @@ export default function Conges({ conges, agents, onRefresh, profil }) {
                                 <X size={13} />
                               </button>
                             </>
+                          )}
+                          {c.statut === 'Approuvé' && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ color: '#2563EB', borderColor: '#2563EB' }}
+                              onClick={() => handleGenerateDoc(c)}
+                              title="Générer l'autorisation de congé"
+                            >
+                              <FileText size={13} />
+                            </button>
                           )}
                           <button
                             className="btn btn-danger btn-sm"
