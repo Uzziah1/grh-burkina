@@ -1,6 +1,7 @@
 // Paie.js - Payroll management page
 // Features: full-screen bulletin editor, real CNSS/IUTS calculation
-// (AIMDIGITAL model), PDF/Excel export, print, black & white preview
+// (AIMDIGITAL model), automatic linking of approved salary advances,
+// PDF/Excel export, print, black & white preview
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -142,7 +143,6 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
     doc.line(14, y + 5, 196, y + 5);
     doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
     doc.setFontSize(9);
-    const c = opts.muted ? 130 : NOIR[0];
     doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
     doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
     doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
@@ -330,6 +330,7 @@ export default function Paie({ agents, entreprise, profil }) {
   const [filterMois, setFilterMois] = useState(NOW.getMonth() + 1);
   const [filterAnnee, setFilterAnnee] = useState(NOW.getFullYear());
   const [saving, setSaving] = useState(false);
+  const [avancesAgent, setAvancesAgent] = useState([]);
 
   const [form, setForm] = useState({
     agent_id: '',
@@ -396,12 +397,30 @@ export default function Paie({ agents, entreprise, profil }) {
     return agents.find(a => a.id === agentId);
   }
 
-  // ── Pre-fill salary from agent data ──
-  function prefillFromAgent(agentId) {
+  // ── Pre-fill salary and pending approved advances from agent data ──
+  async function prefillFromAgent(agentId) {
     const agent = agents.find(a => a.id === agentId);
     if (!agent) return;
     setF('salaire_base', agent.salaire_brut || '');
     setF('agent_id', agentId);
+
+    // Fetch approved advances not yet deducted from any bulletin
+    const { data } = await supabase
+      .from('avances')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('statut', 'Approuvé')
+      .is('deduite_bulletin_id', null);
+
+    const avancesEnAttente = data || [];
+    setAvancesAgent(avancesEnAttente);
+
+    const totalAvances = avancesEnAttente.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0);
+    setF('avance_salaire', totalAvances || 0);
+
+    if (avancesEnAttente.length > 0) {
+      showToast(`${avancesEnAttente.length} avance(s) approuvée(s) trouvée(s) et appliquée(s) automatiquement`, 'success');
+    }
   }
 
   // ── Compute live preview for the "new bulletin" form ──
@@ -446,12 +465,22 @@ export default function Paie({ agents, entreprise, profil }) {
       ...calc,
     };
 
-    const { error } = await supabase.from('bulletins_paie').upsert(data, {
-      onConflict: 'agent_id,mois,annee',
-    });
+    const { data: savedBulletin, error } = await supabase
+      .from('bulletins_paie')
+      .upsert(data, { onConflict: 'agent_id,mois,annee' })
+      .select()
+      .single();
 
     if (error) showToast('Erreur lors de l\'enregistrement : ' + error.message, 'error');
     else {
+      // Mark the linked advances as deducted by this bulletin
+      if (avancesAgent.length > 0 && savedBulletin?.id) {
+        await supabase
+          .from('avances')
+          .update({ deduite_bulletin_id: savedBulletin.id })
+          .in('id', avancesAgent.map(a => a.id));
+      }
+
       showToast(statut === 'Validé' ? 'Bulletin validé !' : 'Bulletin sauvegardé');
       setModal(false);
       setForm({
@@ -461,14 +490,17 @@ export default function Paie({ agents, entreprise, profil }) {
         prime_anciennete: 0, autres_primes: 0, heures_sup: 0,
         autres_retenues: 0, avance_salaire: 0, observations: '',
       });
+      setAvancesAgent([]);
       loadBulletins();
     }
     setSaving(false);
   }
 
   // ── Delete bulletin ──
+  // Also frees up linked advances so they can be re-applied to a future bulletin
   async function handleDelete(id) {
-    if (!window.confirm('Supprimer ce bulletin ?')) return;
+    if (!window.confirm('Supprimer ce bulletin ? Les avances liées seront réinitialisées.')) return;
+    await supabase.from('avances').update({ deduite_bulletin_id: null }).eq('deduite_bulletin_id', id);
     await supabase.from('bulletins_paie').delete().eq('id', id);
     showToast('Bulletin supprimé');
     loadBulletins();
@@ -567,6 +599,7 @@ export default function Paie({ agents, entreprise, profil }) {
                 <th>Salaire brut</th>
                 <th>CNSS sal.</th>
                 <th>IUTS</th>
+                <th>Avance</th>
                 <th>Net à payer</th>
                 <th>Statut</th>
                 <th>Actions</th>
@@ -574,9 +607,9 @@ export default function Paie({ agents, entreprise, profil }) {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>Chargement...</td></tr>
+                <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>Chargement...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                <tr><td colSpan="8" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                   Aucun bulletin pour cette période
                 </td></tr>
               ) : filtered.map(b => {
@@ -597,6 +630,9 @@ export default function Paie({ agents, entreprise, profil }) {
                     <td style={{ fontWeight: 600 }}>{formatFCFA(b.salaire_brut)}</td>
                     <td style={{ color: '#DC2626' }}>{formatFCFA(b.cnss_salarial)}</td>
                     <td style={{ color: '#DC2626' }}>{formatFCFA(b.iuts)}</td>
+                    <td style={{ color: b.avance_salaire > 0 ? '#D97706' : '#A3A3A3' }}>
+                      {b.avance_salaire > 0 ? formatFCFA(b.avance_salaire) : '—'}
+                    </td>
                     <td style={{ fontWeight: 700, color: '#16A34A', fontSize: 14 }}>{formatFCFA(b.salaire_net)}</td>
                     <td>
                       <span className={`badge ${b.statut === 'Validé' ? 'badge-green' : 'badge-orange'}`}>
@@ -646,7 +682,7 @@ export default function Paie({ agents, entreprise, profil }) {
             flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setModal(false)}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setModal(false); setAvancesAgent([]); }}>
                 <X size={14} /> Fermer
               </button>
               <div>
@@ -733,6 +769,17 @@ export default function Paie({ agents, entreprise, profil }) {
                 </div>
               )}
 
+              {avancesAgent.length > 0 && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px',
+                  background: '#FEF3E2', border: '1px solid #FDDBA0',
+                  borderRadius: 8, fontSize: 11, color: '#92400E',
+                }}>
+                  💰 <strong>{avancesAgent.length} avance(s) approuvée(s)</strong> détectée(s) et appliquée(s) automatiquement
+                  ({formatFCFA(avancesAgent.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0))})
+                </div>
+              )}
+
               <div style={{ fontSize: 11, fontWeight: 700, color: '#E8920A', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '20px 0 14px', paddingBottom: 8, borderBottom: '2px solid #FEF3E2' }}>
                 Éléments de rémunération
               </div>
@@ -782,7 +829,7 @@ export default function Paie({ agents, entreprise, profil }) {
                   <input type="number" value={form.autres_retenues} onChange={e => setF('autres_retenues', e.target.value)} placeholder="0" />
                 </div>
                 <div className="form-group">
-                  <label>Avance sur salaire</label>
+                  <label>Avance sur salaire {avancesAgent.length > 0 && <span style={{ color: '#E8920A' }}>(auto)</span>}</label>
                   <input type="number" value={form.avance_salaire} onChange={e => setF('avance_salaire', e.target.value)} placeholder="0" />
                 </div>
                 <div className="form-group full">
