@@ -1,6 +1,6 @@
 // Layout.js - Main application layout with collapsible sidebar
 // White sidebar | Orange accent | Poppins font | Lucide icons
-// Features: collapsible sidebar with tooltips on collapsed state
+// Features: collapsible sidebar with tooltips, user avatar dropdown in topbar
 
 import React, { useState } from 'react';
 import { peutFaire } from '../lib/useProfil';
@@ -10,20 +10,20 @@ import {
   LogOut, ChevronRight, ChevronLeft, Banknote, History,
 } from 'lucide-react';
 
+// ── App version ────────────────────────────────────────────
+const APP_VERSION = 'v1.0.0';
+
 // ── Navigation items ──────────────────────────────────────
 const mainNavItems = [
   { id: 'dashboard',    label: 'Tableau de bord', permission: null,               icon: LayoutDashboard },
   { id: 'agents',       label: 'Agents',           permission: 'voirAgents',       icon: Users },
   { id: 'contrats',     label: 'Contrats',         permission: 'voirContrats',     icon: FileText },
   { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
-  {
-  id: 'paie', label: 'Paie', permission: 'voirAvances', icon: Banknote,
-},
   { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
+  { id: 'paie',         label: 'Paie',             permission: 'voirAvances',      icon: Banknote },
   { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
-  { id: 'historique', label: 'Journalisation', permission: 'voirAgents', icon: History },
+  { id: 'historique',   label: 'Historique',       permission: 'voirAgents',       icon: History },
 ];
-
 
 const settingsNavItems = [
   { id: 'utilisateurs', label: 'Utilisateurs',     permission: 'voirUtilisateurs', icon: UserCog },
@@ -36,12 +36,12 @@ const pageTitles = {
   agents:       'Gestion des agents',
   contrats:     'Suivi des contrats',
   conges:       'Congés',
-  paie: 'Bulletins de paie',
   avances:      'Avances sur salaire',
+  paie:         'Bulletins de paie',
   documents:    'Documents',
-  historique: 'Journalisation',
   entreprise:   'Mon Entreprise',
   utilisateurs: 'Gestion des utilisateurs',
+  historique:   'Historique des modifications',
   fiche:        'Fiche agent',
 };
 
@@ -119,10 +119,104 @@ function NavItem({ item, isActive, onClick, collapsed }) {
     </div>
   );
 }
+
+// ── User avatar dropdown (topbar) ─────────────────────────
+// Hover zone stays continuous between avatar and menu (no gap)
+// so moving the mouse down to click "Se déconnecter" never closes it.
+function UserAvatarMenu({ user, profil, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const roleInfo = profil ? getRoleInfo(profil.role) : null;
+  const initiale = (profil?.prenom || user?.email || '?')[0].toUpperCase();
+  const displayName = profil?.prenom ? `${profil.prenom} ${profil.nom || ''}`.trim() : null;
+
+  return (
+    <div
+      style={{ position: 'relative', paddingBottom: 12 }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: roleInfo?.color || '#737373',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: '#fff',
+          cursor: 'pointer',
+          border: '2px solid #fff',
+          boxShadow: '0 0 0 1px #E5E5E5',
+          fontFamily: 'Poppins, sans-serif',
+        }}
+      >
+        {initiale}
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0,
+          paddingTop: 8,
+        }}>
+          <div style={{
+            background: '#fff',
+            border: '1px solid #E5E5E5',
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            minWidth: 220,
+            overflow: 'hidden',
+          }}>
+            {/* User info */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #F0F0F0' }}>
+              <div style={{
+                fontSize: 13, fontWeight: 700, color: '#0F0F0F',
+                fontFamily: 'Poppins, sans-serif',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {displayName || user?.email}
+              </div>
+              {displayName && (
+                <div style={{ fontSize: 11, color: '#A3A3A3', marginTop: 2 }}>
+                  {user?.email}
+                </div>
+              )}
+              {roleInfo && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  marginTop: 6, padding: '2px 8px',
+                  background: `${roleInfo.color}15`,
+                  color: roleInfo.color,
+                  borderRadius: 20, fontSize: 10, fontWeight: 600,
+                }}>
+                  {roleInfo.label}
+                </div>
+              )}
+            </div>
+
+            {/* Logout button */}
+            <div
+              onClick={onLogout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '11px 16px', cursor: 'pointer',
+                fontSize: 13, fontWeight: 500, color: '#DC2626',
+                transition: 'background 0.15s',
+                fontFamily: 'Poppins, sans-serif',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <LogOut size={15} strokeWidth={2} />
+              Se déconnecter
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Layout ───────────────────────────────────────────
 export default function Layout({ children, page, setPage, user, profil, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
-  const roleInfo = profil ? getRoleInfo(profil.role) : null;
   const sidebarWidth = collapsed ? 64 : 240;
 
   const visibleMain = mainNavItems.filter(n =>
@@ -232,7 +326,6 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
         {/* Navigation */}
         <nav style={{ flex: 1, padding: '14px 0', overflowY: 'auto', overflowX: 'hidden' }}>
 
-          {/* Section label */}
           {!collapsed && (
             <div style={{
               color: '#A3A3A3', fontSize: 10, fontWeight: 600,
@@ -284,89 +377,18 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
           )}
         </nav>
 
-        {/* User info + logout */}
+        {/* App version footer */}
         <div style={{
-          padding: '12px 0',
+          padding: collapsed ? '8px 0' : '8px 20px',
           borderTop: '1px solid #F5F5F5',
+          textAlign: collapsed ? 'center' : 'left',
         }}>
-          {/* User card - only when expanded */}
-          {profil && !collapsed && (
-            <div style={{
-              margin: '0 12px 8px',
-              padding: '10px 12px',
-              background: '#FAFAFA',
-              border: '1px solid #E5E5E5',
-              borderRadius: 10,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: roleInfo?.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
-                }}>
-                  {(profil.prenom || profil.email || '?')[0].toUpperCase()}
-                </div>
-                <div style={{ overflow: 'hidden', flex: 1 }}>
-                  <div style={{
-                    fontSize: 12, fontWeight: 600, color: '#1A1A1A',
-                    whiteSpace: 'nowrap', overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    fontFamily: 'Poppins, sans-serif',
-                  }}>
-                    {profil.prenom
-                      ? `${profil.prenom} ${profil.nom || ''}`.trim()
-                      : profil.email}
-                  </div>
-                  <div style={{
-                    fontSize: 10, color: roleInfo?.color,
-                    marginTop: 1, fontFamily: 'Poppins, sans-serif',
-                    fontWeight: 500,
-                  }}>
-                    {roleInfo?.label}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Avatar only when collapsed */}
-          {profil && collapsed && (
-            <div style={{
-              display: 'flex', justifyContent: 'center',
-              marginBottom: 6,
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: roleInfo?.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, color: '#fff',
-              }}>
-                {(profil.prenom || profil.email || '?')[0].toUpperCase()}
-              </div>
-            </div>
-          )}
-
-          {/* Logout */}
-          <div
-            onClick={onLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: collapsed ? 0 : 10,
-              padding: collapsed ? '9px 0' : '9px 20px',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              cursor: 'pointer',
-              fontSize: 13, fontWeight: 500,
-              color: '#DC2626',
-              transition: 'all 0.15s',
-              fontFamily: 'Poppins, sans-serif',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            <LogOut size={17} strokeWidth={2} />
-            {!collapsed && <span>Déconnexion</span>}
+          <div style={{
+            fontSize: 11, color: '#D4D4D4', fontWeight: 500,
+            fontFamily: 'Poppins, sans-serif',
+            whiteSpace: 'nowrap',
+          }}>
+            {collapsed ? APP_VERSION.replace('v', '') : `RH Manager ${APP_VERSION}`}
           </div>
         </div>
       </div>
@@ -395,24 +417,7 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
           }}>
             {pageTitles[page] || 'RH Manager'}
           </h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '6px 12px',
-              background: '#FAFAFA',
-              border: '1px solid #E5E5E5',
-              borderRadius: 8, fontSize: 12,
-              color: '#737373',
-              fontFamily: 'Poppins, sans-serif',
-            }}>
-              <div style={{
-                width: 7, height: 7,
-                borderRadius: '50%',
-                background: '#16A34A',
-              }} />
-              {user?.email}
-            </div>
-          </div>
+          <UserAvatarMenu user={user} profil={profil} onLogout={onLogout} />
         </div>
 
         {/* Page content */}
