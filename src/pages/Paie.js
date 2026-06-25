@@ -1,6 +1,6 @@
 // Paie.js - Payroll management page
-// Features: bulletin generation (full-screen editor), CNSS/IUTS calculation
-// (AIMDIGITAL model), PDF export, Excel export
+// Features: full-screen bulletin editor, real CNSS/IUTS calculation
+// (AIMDIGITAL model), PDF/Excel export, print, black & white preview
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -42,229 +42,214 @@ const MOIS = [
 // ── Current month/year ────────────────────────────────────
 const NOW = new Date();
 
-// ── Generate bulletin PDF — replicates AIMDIGITAL layout ──
+// ── Generate bulletin PDF — clean black & white layout ────
+// Mirrors the on-screen BulletinPreview component exactly
 function generateBulletinPDF(bulletin, agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
-  const BLEU = [0, 51, 102];
-  const ORANGE = [232, 146, 10];
+  const NOIR = [26, 26, 26];
+  const GRIS = [115, 115, 115];
+  const GRIS_CLAIR = [240, 240, 240];
 
-  // ── Header ──
-  doc.setFillColor(...BLEU);
-  doc.rect(0, 0, 210, 28, 'F');
+  let y = 14;
 
+  // ── Header: logo + company ──
   if (entreprise?.logo_url) {
-    try { doc.addImage(entreprise.logo_url, 'PNG', 4, 2, 22, 22); } catch (e) {}
+    try { doc.addImage(entreprise.logo_url, 'PNG', 14, y - 2, 18, 18); } catch (e) {}
+  } else {
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.rect(14, y - 2, 18, 18);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(6);
+    doc.setTextColor(...GRIS);
+    doc.text('LOGO', 23, y + 7, { align: 'center' });
   }
 
-  const tx = entreprise?.logo_url ? 30 : 14;
-  doc.setTextColor(255, 255, 255);
+  const tx = 36;
+  doc.setTextColor(...NOIR);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(entreprise?.nom || 'Entreprise', tx, 11);
-  doc.setFontSize(7.5);
+  doc.text(entreprise?.nom || 'Entreprise', tx, y + 3);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRIS);
   doc.text([
     entreprise?.siege_social || '',
     entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
     entreprise?.cnss_employeur ? `CNSS: ${entreprise.cnss_employeur}` : '',
-  ].filter(Boolean).join('  |  '), tx, 17);
-  doc.setTextColor(0, 0, 0);
+  ].filter(Boolean).join('  |  '), tx, y + 9);
 
-  // ── Title ──
-  let y = 34;
-  doc.setFillColor(...ORANGE);
-  doc.rect(14, y, 182, 9, 'F');
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(...GRIS);
+  doc.setFontSize(8);
+  doc.text('Bulletin édité le', 196, y, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NOIR);
+  doc.text(today, 196, y + 5, { align: 'right' });
+
+  y += 22;
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  // ── Title bar ──
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`BULLETIN DE PAIE — ${MOIS[bulletin.mois - 1].toUpperCase()} ${bulletin.annee}`, 105, y + 6.5, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 14;
+  doc.text(`BULLETIN DE PAIE — ${MOIS[bulletin.mois - 1].toUpperCase()} ${bulletin.annee}`, 105, y + 3, { align: 'center' });
+  y += 8;
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 6;
 
-  // ── Agent info ──
-  doc.setFillColor(245, 245, 245);
-  doc.rect(14, y, 182, 20, 'F');
+  // ── Employer / Employee info ──
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('INFORMATIONS DE L\'EMPLOYÉ', 17, y + 5.5);
+  doc.text('EMPLOYEUR', 17, y + 2);
+  doc.text('EMPLOYÉ(E)', 107, y + 2);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Nom : ${agent.prenom} ${agent.nom}`, 17, y + 11.5);
-  doc.text(`Poste : ${agent.poste || '—'}`, 17, y + 17);
-  doc.text(`Matricule : ${agent.matricule || '—'}`, 90, y + 11.5);
-  doc.text(`Situation : ${agent.situation_matrimoniale || '—'} — ${agent.nombre_enfants || 0} enfant(s)`, 90, y + 17);
-  doc.text(`N° CNSS : ${agent.cnss || '—'}`, 155, y + 11.5);
-  doc.text(`${bulletin.personnes_a_charge} pers. à charge`, 155, y + 17);
+  doc.setFontSize(9);
+  doc.text(entreprise?.nom || '—', 17, y + 8);
+  doc.text(`${agent.prenom} ${agent.nom}`, 107, y + 8);
+  doc.setFontSize(8);
+  doc.setTextColor(...GRIS);
+  doc.text(`Représenté par : ${entreprise?.representant || '—'}`, 17, y + 13);
+  doc.text(`${agent.poste || '—'}${agent.departement ? ' — ' + agent.departement : ''}`, 107, y + 13);
+  doc.text(`${entreprise?.qualite_representant || ''}`, 17, y + 18);
+  doc.text(`Matricule : ${agent.matricule || '—'} | CNSS : ${agent.cnss || '—'}`, 107, y + 18);
+  doc.setTextColor(...NOIR);
   y += 24;
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 2;
 
-  // ── Earnings table ──
-  doc.setFillColor(230, 240, 255);
-  doc.rect(14, y, 182, 7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('ÉLÉMENTS DE RÉMUNÉRATION', 17, y + 5);
-  doc.text('MONTANT (FCFA)', 170, y + 5, { align: 'right' });
-  y += 9;
+  // ── Helper: section band ──
+  const band = (label) => {
+    doc.setFillColor(...NOIR);
+    doc.rect(14, y, 182, 6.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text(label.toUpperCase(), 17, y + 4.5);
+    doc.setTextColor(...NOIR);
+    y += 8.5;
+  };
 
+  // ── Helper: simple row ──
+  const row = (label, val, opts = {}) => {
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(14, y + 5, 196, y + 5);
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    doc.setFontSize(9);
+    const c = opts.muted ? 130 : NOIR[0];
+    doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
+    doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
+    doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
+    doc.setTextColor(...NOIR);
+    y += 6.2;
+  };
+
+  // ── Helper: total row ──
+  const totalRow = (label, val, big = false) => {
+    const h = big ? 9 : 7.5;
+    doc.setFillColor(...GRIS_CLAIR);
+    doc.rect(14, y, 182, h, 'F');
+    doc.setDrawColor(...NOIR);
+    doc.setLineWidth(0.5);
+    doc.line(14, y, 196, y);
+    doc.line(14, y + h, 196, y + h);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(big ? 12 : 10);
+    doc.text(label, 17, y + (big ? 6.3 : 5.2));
+    doc.text(Math.round(val).toLocaleString('fr-FR') + ' FCFA', 193, y + (big ? 6.3 : 5.2), { align: 'right' });
+    y += h + 3;
+  };
+
+  // ── Earnings ──
+  band('Éléments de rémunération');
   const earnings = [
-    { label: 'Salaire de base',          val: bulletin.salaire_base },
-    { label: 'Sursalaire',               val: bulletin.sursalaire },
-    { label: 'Indemnité de logement',    val: bulletin.indemnite_logement },
-    { label: 'Indemnité de transport',   val: bulletin.indemnite_transport },
-    { label: 'Indemnité de fonction',    val: bulletin.indemnite_fonction },
-    { label: 'Prime d\'ancienneté',      val: bulletin.prime_anciennete },
-    { label: 'Autres primes',            val: bulletin.autres_primes },
-    { label: 'Heures supplémentaires',   val: bulletin.heures_sup },
+    { label: 'Salaire de base',        val: bulletin.salaire_base },
+    { label: 'Sursalaire',             val: bulletin.sursalaire },
+    { label: 'Indemnité de logement',  val: bulletin.indemnite_logement },
+    { label: 'Indemnité de transport', val: bulletin.indemnite_transport },
+    { label: 'Indemnité de fonction',  val: bulletin.indemnite_fonction },
+    { label: 'Prime d\'ancienneté',    val: bulletin.prime_anciennete },
+    { label: 'Autres primes',          val: bulletin.autres_primes },
+    { label: 'Heures supplémentaires', val: bulletin.heures_sup },
   ].filter(e => e.val > 0);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  earnings.forEach((e, i) => {
-    if (i % 2 === 0) { doc.setFillColor(252, 252, 252); doc.rect(14, y, 182, 6, 'F'); }
-    doc.text(e.label, 17, y + 4.3);
-    doc.text(Math.round(e.val).toLocaleString('fr-FR'), 192, y + 4.3, { align: 'right' });
-    y += 6;
-  });
-
-  doc.setFillColor(232, 146, 10);
-  doc.rect(14, y, 182, 7.5, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SALAIRE BRUT', 17, y + 5.2);
-  doc.text(Math.round(bulletin.salaire_brut).toLocaleString('fr-FR'), 192, y + 5.2, { align: 'right' });
-  doc.setTextColor(0, 0, 0);
-  y += 11;
+  earnings.forEach(e => row(e.label, e.val));
+  totalRow('SALAIRE BRUT', bulletin.salaire_brut);
 
   // ── Tax base detail ──
-  doc.setFillColor(255, 245, 230);
-  doc.rect(14, y, 182, 7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('DÉTAIL DE LA BASE IMPOSABLE IUTS', 17, y + 5);
-  y += 9;
+  if (y > 225) { doc.addPage(); y = 20; }
+  band('Base imposable IUTS');
+  row('Salaire imposable (brut - contrôle CNSS)', bulletin.salaire_brut_imposable, { muted: true });
+  row('Exonération logement', -bulletin.exo_logement, { muted: true, indent: true });
+  row('Exonération transport', -bulletin.exo_transport, { muted: true, indent: true });
+  row('Exonération fonction', -bulletin.exo_fonction, { muted: true, indent: true });
+  row('Abattement forfaitaire (25% base)', -bulletin.abattement_forfaitaire, { muted: true });
+  totalRow('BASE IUTS (arrondie)', bulletin.base_iuts);
 
-  const taxDetails = [
-    { l: 'Salaire imposable (brut - contrôle CNSS)', v: bulletin.salaire_brut_imposable },
-    { l: 'Exonération logement',                     v: -bulletin.exo_logement },
-    { l: 'Exonération transport',                    v: -bulletin.exo_transport },
-    { l: 'Exonération fonction',                     v: -bulletin.exo_fonction },
-    { l: 'Abattement forfaitaire (25% base)',         v: -bulletin.abattement_forfaitaire },
-  ];
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  taxDetails.forEach(d => {
-    doc.text(d.l, 17, y + 4);
-    doc.text(Math.round(d.v).toLocaleString('fr-FR'), 192, y + 4, { align: 'right' });
-    y += 5.5;
-  });
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Base IUTS (arrondie)', 17, y + 4);
-  doc.text(Math.round(bulletin.base_iuts).toLocaleString('fr-FR'), 192, y + 4, { align: 'right' });
-  y += 9;
-
-  // ── Deductions table ──
-  doc.setFillColor(255, 235, 235);
-  doc.rect(14, y, 182, 7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('RETENUES', 17, y + 5);
-  doc.text('MONTANT (FCFA)', 170, y + 5, { align: 'right' });
-  y += 9;
-
-  const deductions = [
-    { label: 'CNSS salarié (5.5%, plafond 44 000 FCFA)', val: bulletin.cnss_salarial },
-    { label: `IUTS brut (barème progressif)`,             val: bulletin.iuts_brut },
-    { label: `Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, val: -bulletin.abattement_familial },
-    { label: 'IUTS net à retenir',                        val: bulletin.iuts, bold: true },
-  ];
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  deductions.forEach((d) => {
-    if (d.bold) doc.setFont('helvetica', 'bold');
-    doc.text(d.label, 17, y + 4.3);
-    doc.text(Math.round(d.val).toLocaleString('fr-FR'), 192, y + 4.3, { align: 'right' });
-    if (d.bold) doc.setFont('helvetica', 'normal');
-    y += 6;
-  });
-
-  doc.setFillColor(220, 50, 50);
-  doc.rect(14, y, 182, 7.5, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL RETENUES (CNSS + IUTS)', 17, y + 5.2);
-  doc.text(Math.round(bulletin.total_retenues).toLocaleString('fr-FR'), 192, y + 5.2, { align: 'right' });
-  doc.setTextColor(0, 0, 0);
-  y += 11;
+  // ── Deductions ──
+  if (y > 215) { doc.addPage(); y = 20; }
+  band('Retenues');
+  row('CNSS salarié (5.5%, plafond 44 000 FCFA)', bulletin.cnss_salarial);
+  row('IUTS brut (barème progressif)', bulletin.iuts_brut, { muted: true });
+  row(`Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, -bulletin.abattement_familial, { muted: true, indent: true });
+  row('IUTS net à retenir', bulletin.iuts, { bold: true });
+  totalRow('TOTAL RETENUES (CNSS + IUTS)', bulletin.total_retenues);
 
   // ── Other deductions ──
   if (bulletin.autres_retenues > 0 || bulletin.retenue_effort_guerre > 0 || bulletin.avance_salaire > 0) {
-    const others = [
-      { l: 'Autres retenues',                  v: bulletin.autres_retenues },
-      { l: 'Retenue 1% (effort de guerre)',     v: bulletin.retenue_effort_guerre },
-      { l: 'Avance sur salaire',                v: bulletin.avance_salaire },
-    ].filter(o => o.v > 0);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    others.forEach(o => {
-      doc.text(o.l, 17, y + 4);
-      doc.text(Math.round(o.v).toLocaleString('fr-FR'), 192, y + 4, { align: 'right' });
-      y += 5.5;
-    });
+    if (y > 225) { doc.addPage(); y = 20; }
+    band('Autres déductions');
+    if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+    if (bulletin.retenue_effort_guerre > 0) row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+    if (bulletin.avance_salaire > 0) row('Avance sur salaire', bulletin.avance_salaire);
     y += 2;
   }
 
   // ── Net salary ──
-  doc.setFillColor(22, 163, 74);
-  doc.rect(14, y, 182, 11, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('NET À PAYER', 17, y + 7.5);
-  doc.text(Math.round(bulletin.salaire_net).toLocaleString('fr-FR') + ' FCFA', 192, y + 7.5, { align: 'right' });
-  doc.setTextColor(0, 0, 0);
-  y += 16;
+  if (y > 230) { doc.addPage(); y = 20; }
+  totalRow('NET À PAYER', bulletin.salaire_net, true);
 
-  // ── Employer info ──
-  doc.setFillColor(245, 245, 245);
-  doc.rect(14, y, 182, 9, 'F');
-  doc.setFontSize(7.5);
+  // ── Employer charge note ──
+  doc.setFontSize(8);
+  doc.setTextColor(...GRIS);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 6);
-  doc.setTextColor(0, 0, 0);
-  y += 15;
-
-  if (y > 250) { doc.addPage(); y = 20; }
+  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 4);
+  doc.setTextColor(...NOIR);
+  y += 14;
 
   // ── Signatures ──
-  doc.setFontSize(9);
+  if (y > 245) { doc.addPage(); y = 20; }
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 8;
+
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
   doc.text(entreprise?.qualite_representant || 'L\'EMPLOYEUR', 40, y, { align: 'center' });
   doc.text('L\'EMPLOYÉ(E)', 170, y, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.setTextColor(100, 100, 100);
-  if (entreprise?.mention_signataire) {
-    doc.text(entreprise.mention_signataire, 40, y + 5, { align: 'center' });
-  } else {
-    doc.text('Cachet et signature', 40, y + 5, { align: 'center' });
-  }
+  doc.setTextColor(...GRIS);
+  doc.text(entreprise?.mention_signataire || 'Cachet et signature', 40, y + 5, { align: 'center' });
   doc.text('Lu et approuvé', 170, y + 5, { align: 'center' });
+  doc.setTextColor(...NOIR);
   y += 22;
-  doc.setDrawColor(0, 0, 0);
+  doc.setDrawColor(...NOIR);
   doc.line(14, y, 70, y);
   doc.line(130, y, 195, y);
   doc.setFontSize(8);
-  doc.setTextColor(0, 0, 0);
   doc.text(entreprise?.representant || '', 42, y + 4, { align: 'center' });
   doc.text(`${agent.prenom} ${agent.nom}`, 162, y + 4, { align: 'center' });
 
   y += 12;
-  doc.setTextColor(150, 150, 150);
   doc.setFontSize(7);
+  doc.setTextColor(...GRIS);
   if (entreprise?.pied_de_page) {
     doc.text(entreprise.pied_de_page, 105, y, { align: 'center' });
     y += 5;
@@ -383,6 +368,29 @@ export default function Paie({ agents, entreprise, profil }) {
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
+  // ── Print the on-screen bulletin preview ──
+  function handlePrint() {
+    const printContent = document.getElementById('bulletin-printable');
+    if (!printContent) return;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Bulletin de paie</title>
+          <style>
+            @page { size: A4; margin: 10mm; }
+            body { margin: 0; font-family: 'Poppins', sans-serif; }
+            table { width: 100%; border-collapse: collapse; }
+          </style>
+        </head>
+        <body>${printContent.outerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+  }
+
   // ── Get agent info for tax calc ──
   function getAgent(agentId) {
     return agents.find(a => a.id === agentId);
@@ -396,7 +404,7 @@ export default function Paie({ agents, entreprise, profil }) {
     setF('agent_id', agentId);
   }
 
-  // ── Compute live preview ──
+  // ── Compute live preview for the "new bulletin" form ──
   const selectedAgent = getAgent(form.agent_id);
   const preview = form.agent_id && form.salaire_base ? calculerBulletin({
     ...form,
@@ -480,23 +488,6 @@ export default function Paie({ agents, entreprise, profil }) {
   const valides   = bulletins.filter(b => b.statut === 'Validé').length;
 
   const years = Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
-
-  // ── Render a preview line (used in the "view" modal) ──
-  function PreviewLine({ label, value, color, bold, muted }) {
-    return (
-      <div style={{
-        display: 'flex', justifyContent: 'space-between',
-        padding: '6px 14px', fontSize: 12,
-        borderBottom: '1px solid #F0F0F0',
-        opacity: muted ? 0.6 : 1,
-      }}>
-        <span style={{ color: '#737373' }}>{label}</span>
-        <span style={{ fontWeight: bold ? 700 : 600, color: color || '#0F0F0F' }}>
-          {formatFCFA(value)}
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -670,6 +661,10 @@ export default function Paie({ agents, entreprise, profil }) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={handlePrint} disabled={!preview}>
+                <Printer size={14} />
+                Imprimer
+              </button>
               <button
                 className="btn btn-secondary"
                 onClick={() => preview && selectedAgent && exportBulletinExcel(form, preview, selectedAgent, entreprise)}
@@ -817,95 +812,87 @@ export default function Paie({ agents, entreprise, profil }) {
       )}
 
       {/* ════════════════════════════════
-          MODAL: View bulletin
+          FULL-SCREEN VIEW: View existing bulletin
       ════════════════════════════════ */}
       {viewModal && (() => {
         const agent = getAgent(viewModal.agent_id);
+        const formLike = {
+          mois: viewModal.mois,
+          annee: viewModal.annee,
+          salaire_base: viewModal.salaire_base,
+          sursalaire: viewModal.sursalaire,
+          indemnite_logement: viewModal.indemnite_logement,
+          indemnite_transport: viewModal.indemnite_transport,
+          indemnite_fonction: viewModal.indemnite_fonction,
+          prime_anciennete: viewModal.prime_anciennete,
+          autres_primes: viewModal.autres_primes,
+          heures_sup: viewModal.heures_sup,
+          autres_retenues: viewModal.autres_retenues,
+          avance_salaire: viewModal.avance_salaire,
+        };
+
         return (
-          <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setViewModal(null); }}>
-            <div className="modal" style={{ width: 540 }}>
-              <div className="modal-header">
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 2000,
+            background: '#F5F5F5',
+            display: 'flex', flexDirection: 'column',
+          }}>
+
+            {/* ── Top bar ── */}
+            <div style={{
+              background: '#FFFFFF', borderBottom: '1px solid #E5E5E5',
+              padding: '14px 28px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setViewModal(null)}>
+                  <X size={14} /> Fermer
+                </button>
                 <div>
-                  <h3>Bulletin de paie</h3>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F0F0F', fontFamily: 'Poppins, sans-serif' }}>
+                    Bulletin de paie
+                  </h2>
                   <p style={{ fontSize: 12, color: '#A3A3A3', marginTop: 2 }}>
                     {viewModal.agents?.prenom} {viewModal.agents?.nom} — {MOIS[viewModal.mois - 1]} {viewModal.annee}
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => { if (agent) generateBulletinPDF(viewModal, agent, entreprise); }}>
-                    <Printer size={13} /> PDF
-                  </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setViewModal(null)}>
-                    <X size={14} />
-                  </button>
-                </div>
               </div>
-              <div className="modal-body">
-                <div style={{ background: '#FAFAFA', borderRadius: 12, overflow: 'hidden', border: '1px solid #E5E5E5' }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary" onClick={handlePrint}>
+                  <Printer size={14} />
+                  Imprimer
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => agent && exportBulletinExcel(formLike, viewModal, agent, entreprise)}
+                >
+                  <FileSpreadsheet size={14} />
+                  Export Excel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { if (agent) generateBulletinPDF(viewModal, agent, entreprise); }}
+                >
+                  <FileText size={14} />
+                  Télécharger PDF
+                </button>
+              </div>
+            </div>
 
-                  <div style={{ padding: '8px 14px', background: '#E8F4FF', fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase' }}>
-                    Rémunération
-                  </div>
-                  {[
-                    { l: 'Salaire de base', v: viewModal.salaire_base },
-                    { l: 'Sursalaire', v: viewModal.sursalaire },
-                    { l: 'Indem. logement', v: viewModal.indemnite_logement },
-                    { l: 'Indem. transport', v: viewModal.indemnite_transport },
-                    { l: 'Indem. fonction', v: viewModal.indemnite_fonction },
-                    { l: 'Prime ancienneté', v: viewModal.prime_anciennete },
-                    { l: 'Autres primes', v: viewModal.autres_primes },
-                    { l: 'Heures supp.', v: viewModal.heures_sup },
-                  ].filter(r => parseFloat(r.v) > 0).map(r => <PreviewLine key={r.l} label={r.l} value={r.v} />)}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#E8920A', fontSize: 14, fontWeight: 700, color: '#fff' }}>
-                    <span>Salaire brut</span><span>{formatFCFA(viewModal.salaire_brut)}</span>
-                  </div>
-
-                  <div style={{ padding: '8px 14px', background: '#FFF5E6', fontSize: 11, fontWeight: 700, color: '#D97706', textTransform: 'uppercase' }}>
-                    Base imposable IUTS
-                  </div>
-                  <PreviewLine label="Salaire imposable" value={viewModal.salaire_brut_imposable} muted />
-                  <PreviewLine label="Exonérations totales" value={-viewModal.total_exonerations} muted />
-                  <PreviewLine label="Abattement forfaitaire (25%)" value={-viewModal.abattement_forfaitaire} muted />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 14px', fontSize: 12, fontWeight: 700, background: '#FEF3E2' }}>
-                    <span>Base IUTS</span><span>{formatFCFA(viewModal.base_iuts)}</span>
-                  </div>
-
-                  <div style={{ padding: '8px 14px', background: '#FFF0F0', fontSize: 11, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>
-                    Retenues
-                  </div>
-                  <PreviewLine label="CNSS salarié (5.5%)" value={viewModal.cnss_salarial} color="#DC2626" />
-                  <PreviewLine label="IUTS brut" value={viewModal.iuts_brut} muted />
-                  <PreviewLine label={`Abattement familial (${viewModal.personnes_a_charge} pers.)`} value={-viewModal.abattement_familial} muted />
-                  <PreviewLine label="IUTS net" value={viewModal.iuts} color="#DC2626" bold />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#DC2626', fontSize: 13, fontWeight: 700, color: '#fff' }}>
-                    <span>Total retenues</span><span>{formatFCFA(viewModal.total_retenues)}</span>
-                  </div>
-
-                  {(viewModal.autres_retenues > 0 || viewModal.retenue_effort_guerre > 0 || viewModal.avance_salaire > 0) && (
-                    <>
-                      <div style={{ padding: '8px 14px', background: '#F5F5F5', fontSize: 11, fontWeight: 700, color: '#737373', textTransform: 'uppercase' }}>
-                        Autres déductions
-                      </div>
-                      {viewModal.autres_retenues > 0 && <PreviewLine label="Autres retenues" value={viewModal.autres_retenues} />}
-                      <PreviewLine label="Retenue 1% (effort de guerre)" value={viewModal.retenue_effort_guerre} />
-                      {viewModal.avance_salaire > 0 && <PreviewLine label="Avance sur salaire" value={viewModal.avance_salaire} />}
-                    </>
-                  )}
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: '#16A34A', fontSize: 16, fontWeight: 800, color: '#fff' }}>
-                    <span>NET À PAYER</span><span>{formatFCFA(viewModal.salaire_net)}</span>
-                  </div>
-
-                  <div style={{ padding: '10px 14px', fontSize: 12, color: '#A3A3A3' }}>
-                    Charge patronale CNSS (16%) : <strong style={{ color: '#0F0F0F' }}>{formatFCFA(viewModal.cnss_patronal)}</strong>
-                  </div>
-
-                  {viewModal.observations && (
-                    <div style={{ padding: '10px 14px', fontSize: 12, color: '#737373', borderTop: '1px solid #E5E5E5' }}>
-                      Observations : {viewModal.observations}
-                    </div>
-                  )}
-                </div>
+            {/* ── Centered A4 preview ── */}
+            <div style={{
+              flex: 1, overflowY: 'auto',
+              padding: '28px', display: 'flex', justifyContent: 'center',
+              background: '#EFEFEF',
+            }}>
+              <div style={{ width: '100%', maxWidth: 720 }}>
+                <BulletinPreview
+                  form={formLike}
+                  preview={viewModal}
+                  agent={agent}
+                  entreprise={entreprise}
+                />
               </div>
             </div>
           </div>
