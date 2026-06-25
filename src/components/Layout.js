@@ -7,7 +7,7 @@ import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
   DollarSign, FolderOpen, Building2, UserCog,
-  LogOut, ChevronRight, ChevronLeft, Banknote, History,
+  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList,
 } from 'lucide-react';
 
 // ── App version ────────────────────────────────────────────
@@ -20,9 +20,11 @@ const mainNavItems = [
   { id: 'contrats',     label: 'Contrats',         permission: 'voirContrats',     icon: FileText },
   { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
   { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
-  { id: 'paie',         label: 'Paie',             permission: 'voirAvances',      icon: Banknote },
+  { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
+  { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
+{ id: 'etatSalaires',  label: 'État des salaires', permission: 'voirEtatSalaires', icon: ClipboardList },
   { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
-  { id: 'historique',   label: 'Historique',       permission: 'voirAgents',       icon: History },
+  { id: 'historique',   label: 'Journalisation',   permission: 'voirAgents',       icon: History },
 ];
 
 const settingsNavItems = [
@@ -38,6 +40,7 @@ const pageTitles = {
   conges:       'Congés',
   avances:      'Avances sur salaire',
   paie:         'Bulletins de paie',
+  etatSalaires: 'État des salaires',
   documents:    'Documents',
   entreprise:   'Mon Entreprise',
   utilisateurs: 'Gestion des utilisateurs',

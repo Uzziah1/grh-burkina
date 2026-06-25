@@ -2,10 +2,12 @@
 // Features: full-screen bulletin editor, real CNSS/IUTS calculation
 // (AIMDIGITAL model), automatic linking of approved salary advances,
 // PDF/Excel export, print, black & white preview
+// Access restricted to admin/rh roles (voirPaie permission)
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getInitials, avatarColor } from '../lib/helpers';
+import { peutFaire } from '../lib/useProfil';
 import {
   calculerBulletin, calculerPersonnesACharge, formatFCFA,
 } from '../lib/calcPaie';
@@ -520,6 +522,30 @@ export default function Paie({ agents, entreprise, profil }) {
   const valides   = bulletins.filter(b => b.statut === 'Validé').length;
 
   const years = Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
+
+  // ── Access guard: only admin/rh can view payroll ──
+  // Placed after all hooks to respect React's rules of hooks.
+  if (!peutFaire(profil, 'voirPaie')) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        height: 400, color: '#A3A3A3', fontFamily: 'Poppins, sans-serif', textAlign: 'center',
+      }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 16, background: '#FEE2E2',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+        }}>
+          <DollarSign size={28} color="#DC2626" />
+        </div>
+        <p style={{ fontSize: 15, fontWeight: 600, color: '#737373', marginBottom: 6 }}>
+          Accès restreint
+        </p>
+        <p style={{ fontSize: 13 }}>
+          Vous n'avez pas les permissions nécessaires pour consulter les bulletins de paie.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>

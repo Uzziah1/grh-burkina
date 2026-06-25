@@ -14,6 +14,7 @@ import FicheAgent from './pages/FicheAgent';
 import Utilisateurs from './pages/Utilisateurs';
 import Paie from './pages/Paie';
 import Historique from './pages/Historique';
+import EtatSalaires from './pages/EtatSalaires';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -75,6 +76,7 @@ export default function App() {
     avances: <Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />,
     paie: <Paie agents={agents} onRefresh={loadData} profil={profil} />,
     documents: <Documents agents={agents} entreprise={entreprise} profil={profil} />,
+    etatSalaires: <EtatSalaires entreprise={entreprise} profil={profil} />,
     historique: <Historique />,
     entreprise: <Entreprise onRefresh={loadData} />,
     fiche: <FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} profil={profil} />,
