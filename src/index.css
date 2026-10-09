@@ -178,6 +178,8 @@ body {
 }
 .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
 
+.btn-success { background: #16A34A; color: var(--white); border: 1px solid #16A34A; }
+.btn-success:hover { background: #15803d; transform: translateY(-1px); }
 .btn-danger { background: var(--danger); color: var(--white); }
 .btn-danger:hover { background: #b91c1c; }
 
