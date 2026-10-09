@@ -97,14 +97,35 @@ export default function Entreprise({ onRefresh }) {
     const data = { ...form };
     delete data.id;
     delete data.created_at;
+
+    // Tente un premier enregistrement complet
+    let error;
     if (id) {
-      const { error } = await supabase.from('entreprise').update(data).eq('id', id);
-      if (error) showToast('Erreur lors de la sauvegarde', 'error');
-      else { showToast('Informations sauvegardées avec succès'); onRefresh(); }
+      ({ error } = await supabase.from('entreprise').update(data).eq('id', id));
     } else {
-      const { error } = await supabase.from('entreprise').insert(data);
-      if (error) showToast('Erreur lors de la sauvegarde', 'error');
-      else { showToast('Informations sauvegardées avec succès'); loadEntreprise(); onRefresh(); }
+      ({ error } = await supabase.from('entreprise').insert(data));
+    }
+
+    // Si erreur colonne inconnue, réessaie sans les champs bancaires (migration pas encore faite)
+    if (error && error.message && error.message.includes('column')) {
+      console.warn('Colonnes manquantes, réessai sans banque/numero_compte:', error.message);
+      const dataFallback = { ...data };
+      delete dataFallback.banque;
+      delete dataFallback.numero_compte;
+      if (id) {
+        ({ error } = await supabase.from('entreprise').update(dataFallback).eq('id', id));
+      } else {
+        ({ error } = await supabase.from('entreprise').insert(dataFallback));
+      }
+    }
+
+    if (error) {
+      console.error('Erreur sauvegarde entreprise:', error);
+      showToast(`Erreur : ${error.message}`, 'error');
+    } else {
+      showToast('Informations sauvegardées avec succès');
+      if (!id) loadEntreprise();
+      onRefresh();
     }
     setSaving(false);
   }
