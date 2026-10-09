@@ -23,39 +23,20 @@ async function loadImage(url) {
   });
 }
 
-// ── En-tête : logo + nom entreprise (layout FACTURE D'AVANCE) ──
-// Logo à gauche, nom + infos rapides à droite du logo
+// ── En-tête : logo centré seul (layout FACTURE D'AVANCE) ──
 async function entete(doc, entreprise) {
-  let logoW = 0;
-
   if (entreprise.logo_url) {
     try {
       const imgData = await loadImage(entreprise.logo_url);
       if (imgData) {
-        // Logo : max 28 mm de haut, proportions conservées
-        doc.addImage(imgData, 'PNG', 14, 8, 28, 28);
-        logoW = 34; // décalage texte
+        // Logo centré horizontalement, 30 mm de haut
+        const logoH = 30;
+        const logoW = 30;
+        const x = (210 - logoW) / 2; // centré sur A4 (210 mm)
+        doc.addImage(imgData, 'PNG', x, 6, logoW, logoH);
       }
     } catch (e) {}
   }
-
-  const textX = 14 + logoW;
-
-  // Nom de l'entreprise — grand, gras, noir
-  doc.setTextColor(...NOIR);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(entreprise.nom || 'NOM DE L\'ENTREPRISE', textX, 18);
-
-  // Forme juridique + ville en petit sous le nom
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...GRIS);
-  const sousTitre = [
-    entreprise.forme_juridique,
-    entreprise.siege_social || entreprise.ville,
-  ].filter(Boolean).join(' — ');
-  if (sousTitre) doc.text(sousTitre, textX, 25);
 
   // Ligne de séparation sous l'en-tête
   doc.setDrawColor(...GRIS_CLAIR);
@@ -162,15 +143,19 @@ function signatures(doc, y, entreprise) {
   return y;
 }
 
-// ── Pied de page : références complètes de l'entreprise ──
-// Layout calqué sur FASO ARMORED : Nom · Adresse · Tél. · RCCM · IFU · Compte
+// ── Pied de page : 3 lignes comme le modèle FASO ARMORED ──
+// Ligne 1 : NOM ENTREPRISE (gras, noir)
+// Ligne 2 : adresse · Tél. (gris)
+// Ligne 3 : RCCM · IFU · N° DE COMPTE (gris)
 function piedPage(doc, entreprise) {
   const pageCount = doc.internal.getNumberOfPages();
 
-  // Construction de la ligne de références
-  const refs = [
+  const ligne2 = [
     entreprise.siege_social,
     entreprise.telephone ? `Tél.: ${entreprise.telephone}` : '',
+  ].filter(Boolean).join(' · ');
+
+  const ligne3 = [
     entreprise.rccm ? `RCCM : ${entreprise.rccm}` : '',
     entreprise.ifu ? `IFU : ${entreprise.ifu}` : '',
     entreprise.numero_compte ? `N° DE COMPTE : ${entreprise.numero_compte}` : '',
@@ -182,25 +167,34 @@ function piedPage(doc, entreprise) {
     // Ligne de séparation
     doc.setDrawColor(...GRIS_CLAIR);
     doc.setLineWidth(0.4);
-    doc.line(14, 280, 196, 280);
+    doc.line(14, 278, 196, 278);
 
-    // Nom de l'entreprise en gras
+    // Ligne 1 : Nom entreprise — gras, noir
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(8);
     doc.setTextColor(...NOIR);
-    doc.text(entreprise.nom || '', 105, 284, { align: 'center' });
+    doc.text(entreprise.nom || '', 105, 283, { align: 'center' });
 
-    // Références sur la ligne en dessous
-    if (refs) {
+    // Ligne 2 : adresse · tél — normal, gris
+    if (ligne2) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.5);
       doc.setTextColor(...GRIS);
-      doc.text(refs, 105, 288, { align: 'center' });
+      doc.text(ligne2, 105, 287.5, { align: 'center' });
     }
 
-    // Numéro de page à droite
+    // Ligne 3 : RCCM · IFU · compte — normal, gris
+    if (ligne3) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...GRIS);
+      doc.text(ligne3, 105, 292, { align: 'center' });
+    }
+
+    // Numéro de page à droite sur la dernière ligne
     doc.setFontSize(6.5);
-    doc.text(`${i} / ${pageCount}`, 196, 288, { align: 'right' });
+    doc.setTextColor(...GRIS);
+    doc.text(`${i} / ${pageCount}`, 196, 292, { align: 'right' });
   }
 }
 
