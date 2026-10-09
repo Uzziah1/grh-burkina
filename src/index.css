@@ -47,6 +47,24 @@
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
 }
 
+/* ── Skeleton Loading ── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #2a3a4a 25%, #344454 50%, #2a3a4a 75%);
+  background-size: 600px 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+  border-radius: 6px;
+}
+.skeleton-light {
+  background: linear-gradient(90deg, #e5e5e5 25%, #f0f0f0 50%, #e5e5e5 75%);
+  background-size: 600px 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+  border-radius: 6px;
+}
+
 /* ── Base ── */
 body {
   font-family: 'Poppins', sans-serif;
