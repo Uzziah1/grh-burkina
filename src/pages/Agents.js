@@ -92,6 +92,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   const [loading, setLoading] = useState(false);
   const [docModal, setDocModal] = useState(null);
   const [step, setStep] = useState(1);
+  const [selected, setSelected] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   // ── Unique filter options ──
   const postes = [...new Set(agents.map(a => a.poste))].sort();
@@ -178,6 +180,36 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     await supabase.from('agents').delete().eq('id', id);
     showToast('Agent supprimé');
     onRefresh();
+  }
+
+  // ── Delete selected agents ──
+  async function handleDeleteSelected() {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Supprimer ${selected.size} agent(s) ? Cette action est irréversible.`)) return;
+    setDeleting(true);
+    const ids = [...selected];
+    const { error } = await supabase.from('agents').delete().in('id', ids);
+    if (error) showToast('Erreur lors de la suppression', 'error');
+    else { showToast(`${ids.length} agent(s) supprimé(s)`); setSelected(new Set()); onRefresh(); }
+    setDeleting(false);
+  }
+
+  // ── Toggle select all (filtered agents) ──
+  function toggleSelectAll() {
+    if (selected.size === filtered.length && filtered.length > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(a => a.id)));
+    }
+  }
+
+  // ── Toggle single agent ──
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   // ── Generate document ──
@@ -447,6 +479,18 @@ function importExcel(file) {
           />
         </label>
 
+        {/* Delete selected */}
+        {peutFaire(profil, 'supprimerAgents') && selected.size > 0 && (
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={handleDeleteSelected}
+            disabled={deleting}
+          >
+            <Trash2 size={14} />
+            {deleting ? 'Suppression...' : `Supprimer (${selected.size})`}
+          </button>
+        )}
+
         {/* Add agent */}
         {peutFaire(profil, 'modifierAgents') && (
           <button className="btn btn-primary btn-sm" onClick={openAdd}>
@@ -526,12 +570,30 @@ function importExcel(file) {
                 sur {agents.length} au total
               </span>
             )}
+            {selected.size > 0 && (
+              <span style={{
+                fontSize: 12, color: '#E8920A', fontWeight: 600, marginLeft: 10,
+                background: '#FFF3E0', padding: '2px 8px', borderRadius: 6,
+              }}>
+                {selected.size} sélectionné(s)
+              </span>
+            )}
           </h3>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selected.size === filtered.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
+                    title="Tout sélectionner"
+                  />
+                </th>
                 <th>Agent</th>
                 <th>Poste</th>
                 <th>Département</th>
@@ -546,7 +608,7 @@ function importExcel(file) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                  <td colSpan="10" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                     Aucun agent trouvé
                   </td>
                 </tr>
@@ -554,8 +616,17 @@ function importExcel(file) {
                 const c = avatarColor(a.nom);
                 const jours = joursRestants(a.date_fin_contrat);
                 const isExpiring = a.type_contrat === 'CDD' && jours !== null && jours <= 30 && jours >= 0;
+                const isSelected = selected.has(a.id);
                 return (
-                  <tr key={a.id}>
+                  <tr key={a.id} style={{ background: isSelected ? '#FFF8F0' : undefined }}>
+                    <td style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(a.id)}
+                        style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
+                      />
+                    </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="avatar" style={{ background: c.bg, color: c.fg }}>
