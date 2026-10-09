@@ -2,7 +2,7 @@
 // Layout identique au modèle Excel fourni
 
 import React from 'react';
-import { formatFCFA } from '../lib/calcPaie';
+// formatFCFA importé pour compatibilité externe si besoin
 
 const MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -30,18 +30,10 @@ const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
 const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
 
 // Cellule sans bordure gauche/droite pour les lignes de regroupement
-const CELL_INNER = { ...CELL, borderLeft: 'none', borderRight: 'none' };
-
 function fmt(v) {
   if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
   const n = parseFloat(v);
   if (isNaN(n) || n === 0) return '';
-  return Math.round(n).toLocaleString('fr-FR');
-}
-
-function fmtNeg(v) {
-  const n = parseFloat(v);
-  if (!n || n === 0) return '';
   return Math.round(n).toLocaleString('fr-FR');
 }
 
@@ -60,7 +52,6 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
   }
 
   const moisIdx = (form.mois || 1) - 1;
-  const moisLabel = MOIS[moisIdx];
   const annee = form.annee || '';
 
   // Calcul date début/fin du mois

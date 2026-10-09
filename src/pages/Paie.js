@@ -272,7 +272,6 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   // Colonnes : L=14, col1=14..90, col2=90..150, col3=150..196
   const L = 14, R = 196;
   const C1 = 90, C2 = 150; // séparateurs colonnes
-  const W = R - L; // 182
 
   let y = 12;
 
