@@ -358,6 +358,19 @@ function importExcel(file) {
 
       // Map to agent fields
       const parseNum = v => v ? parseFloat(String(v).replace(/\s/g, '').replace(',', '.')) || 0 : 0;
+
+      // Normalize type_contrat: handle STAGIAIRE → Stagiaire, uppercase variants
+      const rawType = (r['type contrat'] || r['contrat'] || 'CDI').toString().trim();
+      const normalizeType = t => {
+        const u = t.toUpperCase();
+        if (u === 'STAGIAIRE') return 'Stagiaire';
+        if (u === 'VDP') return 'VDP';
+        if (u === 'CDD') return 'CDD';
+        return 'CDI';
+      };
+      const typeContrat = normalizeType(rawType);
+      const isHorsPayroll = typeContrat === 'VDP' || typeContrat === 'Stagiaire';
+
       const agent = {
         nom:       (r['nom'] || r['name'] || '').toString().trim(),
         prenom:    (r['prenom'] || r['prenoms'] || r['first name'] || '').toString().trim(),
@@ -370,19 +383,20 @@ function importExcel(file) {
         email:            r['email'] || r['mail'] || null,
         adresse:          r['adresse'] || r['address'] || null,
         nin:              r['nin'] || null,
-        cnib:             r['n cnib'] || r['cnib'] || r['n° cnib'] || r['numero cnib'] || null,
+        cnib:             r['n cnib'] || r['cnib'] || r['numero cnib'] || null,
         cnss:             r['cnss'] || null,
         poste:            (r['poste'] || r['fonction'] || r['job'] || '').toString().trim(),
         departement:      r['departement'] || r['service'] || null,
-        categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
-        type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
+        categorie_socioprofessionnelle: r['categorie sociopro'] || r['categorie'] || r['cat'] || null,
+        type_contrat:     typeContrat,
         date_embauche:    excelDateToISO(r['date embauche'] || r['embauche'] || r['date d\'embauche']),
         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
-        salaire_brut:     parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
-        sursalaire:       parseNum(r['sursalaire']),
-        indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
-        indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
-        indemnite_fonction:  parseNum(r['indem. fonction'] || r['indemnite fonction'] || r['indem fonction']),
+        // VDP/Stagiaire : salaire et indemnités à 0, pas de cotisations
+        salaire_brut:     isHorsPayroll ? null : (parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null),
+        sursalaire:       isHorsPayroll ? 0 : parseNum(r['sursalaire']),
+        indemnite_logement:  isHorsPayroll ? 0 : parseNum(r['indem logement'] || r['indemnite logement']),
+        indemnite_transport: isHorsPayroll ? 0 : parseNum(r['indem transport'] || r['indemnite transport']),
+        indemnite_fonction:  isHorsPayroll ? 0 : parseNum(r['indem fonction'] || r['indemnite fonction']),
         statut:           r['statut'] || 'Actif',
       };
 
@@ -648,8 +662,10 @@ function importExcel(file) {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span className={`badge ${
-                          a.type_contrat === 'CDI' ? 'badge-blue' :
-                          a.type_contrat === 'CDD' ? 'badge-orange' :
+                          a.type_contrat === 'CDI'       ? 'badge-blue' :
+                          a.type_contrat === 'CDD'       ? 'badge-orange' :
+                          a.type_contrat === 'VDP'       ? 'badge-purple' :
+                          a.type_contrat === 'Stagiaire' ? 'badge-teal' :
                           'badge-gray'
                         }`}>
                           {a.type_contrat}
