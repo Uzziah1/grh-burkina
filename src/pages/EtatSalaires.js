@@ -1,7 +1,7 @@
 // EtatSalaires.js - Monthly payroll summary page
 // Mirrors the Excel "ETAT DES SALAIRES" layout exactly (single bloc, no category split)
-// Columns: N°, Noms, Fonction, Sal.Base | AVANTAGES(4) | Sal.Brut | Nb jours | RETENUES(CNSS emp, CNSS empr 16%, IUTS) | Sal.avant déd. | Retenue 1% | Avance | Sal.Net
-// = 17 columns total
+// Columns: N°, Noms, Fonction, Sal.Base | AVANTAGES(4) | Sal.Brut | Nb jours | RETENUES(CNSS emp, CNSS empr 16%, IUTS) | Sal.avant déd. | Retenue 1% | Avance | Sal.Net | TPA
+// = 18 columns total
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -30,7 +30,7 @@ function fmt(val) {
 // PDF: space as thousands separator
 function fmtPDF(val) {
   const n = Math.round(parseFloat(val) || 0);
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 function sum(arr, key) {
@@ -44,6 +44,11 @@ function getEtatNum(mois, annee) {
 // CNSS patronal = 16% du salaire brut
 function cnssEmployeur(salaireBrut) {
   return Math.round((parseFloat(salaireBrut) || 0) * 0.16);
+}
+
+// TPA = 3% du salaire brut
+function tpaAgent(salaireBrut) {
+  return Math.round((parseFloat(salaireBrut) || 0) * 0.03);
 }
 
 // ── PDF export ────────────────────────────────────────────
@@ -66,7 +71,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     148, 17, { align: 'center' }
   );
 
-  // 17 colonnes — 2 niveaux d'en-têtes
+  // 18 colonnes — 2 niveaux d'en-têtes
   const head = [
     [
       { content: 'N°',                rowSpan: 2, styles: { valign: 'middle' } },
@@ -81,6 +86,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
       { content: 'RETENUE\n1%\n(charge\nemployeur)', rowSpan: 2, styles: { valign: 'middle', halign: 'right' } },
       { content: 'AVANCE\nSUR\nSALAIRE', rowSpan: 2, styles: { valign: 'middle', halign: 'right' } },
       { content: 'SALAIRE\nNET',      rowSpan: 2, styles: { valign: 'middle', halign: 'right', fontStyle: 'bold' } },
+      { content: 'TPA\n(3%)',         rowSpan: 2, styles: { valign: 'middle', halign: 'right' } },
     ],
     [
       { content: 'INDEM DE\nFONCTION', styles: { halign: 'right' } },
@@ -111,11 +117,12 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     fmtPDF(b.retenue_effort_guerre),
     fmtPDF(b.avance_salaire),
     fmtPDF(b.salaire_net),
+    fmtPDF(tpaAgent(b.salaire_brut)),
   ]);
 
   const totalBrutPDF   = sum(bulletins, 'salaire_brut');
   const totalCnssEmpr  = bulletins.reduce((s, b) => s + cnssEmployeur(b.salaire_brut), 0);
-  const tpa            = Math.round(totalBrutPDF * 0.03);
+  const totalTPA       = Math.round(totalBrutPDF * 0.03);
 
   const totRow = [
     { content: '',               styles: { fontStyle: 'bold' } },
@@ -135,22 +142,12 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     fmtPDF(sum(bulletins, 'retenue_effort_guerre')),
     fmtPDF(sum(bulletins, 'avance_salaire')),
     { content: fmtPDF(sum(bulletins, 'salaire_net')), styles: { fontStyle: 'bold' } },
-  ];
-
-  const tpaRow = [
-    '',
-    {
-      content: 'Taxe Patronale d\'Apprentissage (3% de la masse brute)',
-      colSpan: 7,
-      styles: { fontStyle: 'italic', textColor: [80, 60, 0] },
-    },
-    { content: fmtPDF(tpa), styles: { fontStyle: 'bold', halign: 'right', textColor: [80, 60, 0] } },
-    { content: '', colSpan: 8 },
+    { content: fmtPDF(totalTPA), styles: { fontStyle: 'bold', halign: 'right' } },
   ];
 
   autoTable(doc, {
     head,
-    body: [...body, totRow, tpaRow],
+    body: [...body, totRow],
     startY: 22,
     theme: 'grid',
     styles: {
@@ -167,30 +164,28 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     },
     columnStyles: {
       0:  { halign: 'center', cellWidth: 6 },
-      1:  { cellWidth: 32 },
-      2:  { cellWidth: 20 },
-      3:  { halign: 'right', cellWidth: 13 },
-      4:  { halign: 'right', cellWidth: 12 },
-      5:  { halign: 'right', cellWidth: 11 },
-      6:  { halign: 'right', cellWidth: 12 },
-      7:  { halign: 'right', cellWidth: 12 },
-      8:  { halign: 'right', cellWidth: 13 },
-      9:  { halign: 'center', cellWidth: 13 },
-      10: { halign: 'right', cellWidth: 11 },
-      11: { halign: 'right', cellWidth: 13 },
-      12: { halign: 'right', cellWidth: 10 },
-      13: { halign: 'right', cellWidth: 13 },
-      14: { halign: 'right', cellWidth: 12 },
-      15: { halign: 'right', cellWidth: 12 },
-      16: { halign: 'right', cellWidth: 13 },
+      1:  { cellWidth: 30 },
+      2:  { cellWidth: 18 },
+      3:  { halign: 'right', cellWidth: 12 },
+      4:  { halign: 'right', cellWidth: 11 },
+      5:  { halign: 'right', cellWidth: 10 },
+      6:  { halign: 'right', cellWidth: 11 },
+      7:  { halign: 'right', cellWidth: 11 },
+      8:  { halign: 'right', cellWidth: 12 },
+      9:  { halign: 'center', cellWidth: 12 },
+      10: { halign: 'right', cellWidth: 10 },
+      11: { halign: 'right', cellWidth: 12 },
+      12: { halign: 'right', cellWidth: 9 },
+      13: { halign: 'right', cellWidth: 12 },
+      14: { halign: 'right', cellWidth: 11 },
+      15: { halign: 'right', cellWidth: 11 },
+      16: { halign: 'right', cellWidth: 12 },
+      17: { halign: 'right', cellWidth: 10 },
     },
     didParseCell: (data) => {
       if (data.row.index === body.length) {
         data.cell.styles.fillColor = [220, 220, 220];
         data.cell.styles.fontStyle = 'bold';
-      }
-      if (data.row.index === body.length + 1) {
-        data.cell.styles.fillColor = [255, 248, 225];
       }
     },
   });
@@ -231,19 +226,19 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
   const nomEntreprise = (entreprise?.nom || '').toUpperCase();
   const ville   = entreprise?.ville || 'OUAGADOUGOU';
 
-  // On construit en aoa (array of arrays) — 17 colonnes
+  // On construit en aoa (array of arrays) — 18 colonnes (A..R)
   const rows = [];
 
   // Ligne 1 : ville + date (col A)
   rows.push([`${ville}, le ${today}`]);
   rows.push([]);
 
-  // Ligne 3 : titre centré (col A, on mergera A3:Q3 plus bas)
+  // Ligne 3 : titre centré (col A, on mergera A3:R3 plus bas)
   rows.push([`ETAT N°${etatNum}/RECAPITULATIF DES SALAIRES DE ${nomEntreprise} DU MOIS DE ${nomMois} ${annee}`]);
   rows.push([]);
 
   // Ligne 5 : en-têtes niveau 1
-  // Colonnes : N°(A) | Noms(B) | Fonction(C) | Sal.Base(D) | <AVANTAGES: E-H> | Sal.Brut(I) | Nb jours(J) | <RETENUES: K-M> | Sal.avant déd.(N) | Retenue 1%(O) | Avance(P) | Sal.Net(Q)
+  // A:N° B:Noms C:Fonction D:Sal.Base E-H:AVANTAGES I:Sal.Brut J:Nb jours K-M:RETENUES N:Sal.avant déd. O:Retenue 1% P:Avance Q:Sal.Net R:TPA
   rows.push([
     'N°', 'Noms et prénoms', 'FONCTION', 'SALAIRE\nDE BASE',
     'AVANTAGES', '', '', '',
@@ -253,6 +248,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     'RETENUE\n1%\n(charge\nemployeur)',
     'AVANCE\nSUR\nSALAIRE',
     'SALAIRE\nNET',
+    'TPA\n(3%)',
   ]);
 
   // Ligne 6 : en-têtes niveau 2 (sous-colonnes avantages + retenues)
@@ -261,7 +257,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     'INDEM DE\nFONCTION', 'INDEM\nD\'H SUP', 'INDEM DE\nLOGMT', 'INDEM DE\nTRSPRT',
     '', '',
     'CNSS\nemployé', 'CNSS\nemployeur\n(16%)', 'IUTS',
-    '', '', '', '',
+    '', '', '', '', '',
   ]);
 
   // Données agents
@@ -284,12 +280,14 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
       Math.round(b.retenue_effort_guerre || 0),
       Math.round(b.avance_salaire || 0),
       Math.round(b.salaire_net || 0),
+      tpaAgent(b.salaire_brut),
     ]);
   });
 
   // Ligne TOTAL GÉNÉRAL
   const totalBrutXLS  = Math.round(sum(bulletins, 'salaire_brut'));
   const totalCnssEmpr = bulletins.reduce((s, b) => s + cnssEmployeur(b.salaire_brut), 0);
+  const totalTPA      = Math.round(totalBrutXLS * 0.03);
   rows.push([
     '', 'TOTAL GÉNÉRAL', '',
     Math.round(sum(bulletins, 'salaire_base')),
@@ -305,13 +303,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     Math.round(sum(bulletins, 'retenue_effort_guerre')),
     Math.round(sum(bulletins, 'avance_salaire')),
     Math.round(sum(bulletins, 'salaire_net')),
-  ]);
-
-  // Ligne TPA
-  const tpaXLS = Math.round(totalBrutXLS * 0.03);
-  rows.push([
-    '', 'Taxe Patronale d\'Apprentissage (3% de la masse brute)', '', '', '', '', '', '',
-    tpaXLS, '', '', '', '', '', '', '', '',
+    totalTPA,
   ]);
 
   rows.push([]);
@@ -321,15 +313,15 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
   rows.push([]);
 
   if (entreprise?.qualite_representant) {
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
       entreprise.qualite_representant]);
   }
   if (entreprise?.representant_nom) {
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
       entreprise.representant_nom]);
   }
   if (entreprise?.mention_signataire) {
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
       entreprise.mention_signataire]);
   }
 
@@ -338,22 +330,23 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
   // Largeurs colonnes (en caractères) — calibrées pour tenir sur A4 paysage
   ws['!cols'] = [
     { wch: 4 },   // A : N°
-    { wch: 26 },  // B : Noms
-    { wch: 18 },  // C : Fonction
-    { wch: 12 },  // D : Salaire base
-    { wch: 11 },  // E : Indem fonction
-    { wch: 10 },  // F : H.Sup
-    { wch: 11 },  // G : Indem logement
-    { wch: 11 },  // H : Indem transport
-    { wch: 12 },  // I : Salaire brut
-    { wch: 11 },  // J : Nb jours
-    { wch: 11 },  // K : CNSS employé
-    { wch: 12 },  // L : CNSS employeur
-    { wch: 9 },   // M : IUTS
-    { wch: 13 },  // N : Sal. avant déd.
-    { wch: 12 },  // O : Retenue 1%
-    { wch: 11 },  // P : Avance
-    { wch: 12 },  // Q : Salaire net
+    { wch: 24 },  // B : Noms
+    { wch: 16 },  // C : Fonction
+    { wch: 11 },  // D : Salaire base
+    { wch: 10 },  // E : Indem fonction
+    { wch: 9 },   // F : H.Sup
+    { wch: 10 },  // G : Indem logement
+    { wch: 10 },  // H : Indem transport
+    { wch: 11 },  // I : Salaire brut
+    { wch: 10 },  // J : Nb jours
+    { wch: 10 },  // K : CNSS employé
+    { wch: 11 },  // L : CNSS employeur
+    { wch: 8 },   // M : IUTS
+    { wch: 12 },  // N : Sal. avant déd.
+    { wch: 11 },  // O : Retenue 1%
+    { wch: 10 },  // P : Avance
+    { wch: 11 },  // Q : Salaire net
+    { wch: 9 },   // R : TPA
   ];
 
   // Hauteurs lignes : en-têtes sur 2 lignes doivent être hautes
@@ -364,10 +357,9 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
 
   // Fusions cellules
   const merges = [
-    // Titre — ligne 3 (index 2) : A3:Q3
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 16 } },
+    // Titre — ligne 3 (index 2) : A3:R3
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 17 } },
     // En-têtes niveau 1 — ligne 5 (index 4) : colonnes qui span sur 2 lignes
-    // N°, Noms, Fonction, Sal.Base, Sal.Brut, Nb jours, Sal.avant déd., Retenue 1%, Avance, Sal.Net
     { s: { r: 4, c: 0 },  e: { r: 5, c: 0  } }, // N°
     { s: { r: 4, c: 1 },  e: { r: 5, c: 1  } }, // Noms
     { s: { r: 4, c: 2 },  e: { r: 5, c: 2  } }, // Fonction
@@ -380,6 +372,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     { s: { r: 4, c: 14 }, e: { r: 5, c: 14 } }, // Retenue 1%
     { s: { r: 4, c: 15 }, e: { r: 5, c: 15 } }, // Avance
     { s: { r: 4, c: 16 }, e: { r: 5, c: 16 } }, // Sal. net
+    { s: { r: 4, c: 17 }, e: { r: 5, c: 17 } }, // TPA
   ];
   ws['!merges'] = merges;
 
@@ -444,7 +437,7 @@ export default function EtatSalaires({ entreprise, profil }) {
     );
   }
 
-  const COL = 17; // nombre total de colonnes
+  const COL = 18; // nombre total de colonnes
 
   return (
     <div>
@@ -521,28 +514,29 @@ export default function EtatSalaires({ entreprise, profil }) {
                 <th rowSpan={2} style={{ verticalAlign: 'middle' }}>Noms et prénoms</th>
                 <th rowSpan={2} style={{ verticalAlign: 'middle' }}>Fonction</th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle' }}>Salaire de base</th>
-                <th colSpan={4} style={{ textAlign: 'center', background: '#F5F0E8', borderBottom: '1px solid #E5E5E5' }}>
+                <th colSpan={4} style={{ textAlign: 'center', borderBottom: '1px solid #E5E5E5' }}>
                   AVANTAGES
                 </th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontWeight: 700 }}>Salaire brut</th>
                 <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: 10 }}>Nb jours</th>
-                <th colSpan={3} style={{ textAlign: 'center', background: '#FFF0F0', borderBottom: '1px solid #E5E5E5' }}>
+                <th colSpan={3} style={{ textAlign: 'center', borderBottom: '1px solid #E5E5E5' }}>
                   RETENUES
                 </th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontSize: 10 }}>Sal. avant déd.</th>
-                <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontSize: 10 }}>Retenue 1%<br/><span style={{ fontSize: 9, color: '#737373', fontWeight: 400 }}>(charge empl.)</span></th>
+                <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontSize: 10 }}>Retenue 1%<br/><span style={{ fontSize: 9, fontWeight: 400 }}>(charge empl.)</span></th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle' }}>Avance</th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontWeight: 700 }}>Salaire net</th>
+                <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'middle', fontSize: 10 }}>TPA<br/><span style={{ fontSize: 9, fontWeight: 400 }}>(3%)</span></th>
               </tr>
               {/* Ligne 2 — sous-colonnes */}
               <tr>
-                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 10 }}>Indem Fonct.</th>
-                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 10 }}>Indem H.Sup</th>
-                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 10 }}>Indem Logmt</th>
-                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 10 }}>Indem Trsprt</th>
-                <th style={{ textAlign: 'right', background: '#FFF8F8', fontSize: 10 }}>CNSS<br/><span style={{ fontSize: 9, color: '#737373', fontWeight: 400 }}>employé</span></th>
-                <th style={{ textAlign: 'right', background: '#FFF8F8', fontSize: 10 }}>CNSS<br/><span style={{ fontSize: 9, color: '#737373', fontWeight: 400 }}>empl. 16%</span></th>
-                <th style={{ textAlign: 'right', background: '#FFF8F8', fontSize: 10 }}>IUTS</th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>Indem Fonct.</th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>Indem H.Sup</th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>Indem Logmt</th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>Indem Trsprt</th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>CNSS<br/><span style={{ fontSize: 9, fontWeight: 400 }}>employé</span></th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>CNSS<br/><span style={{ fontSize: 9, fontWeight: 400 }}>empl. 16%</span></th>
+                <th style={{ textAlign: 'right', fontSize: 10 }}>IUTS</th>
               </tr>
             </thead>
             <tbody>
@@ -583,6 +577,7 @@ export default function EtatSalaires({ entreprise, profil }) {
                         {b.avance_salaire > 0 ? fmt(b.avance_salaire) : '—'}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(b.salaire_net)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(tpaAgent(b.salaire_brut))}</td>
                     </tr>
                   ))}
 
@@ -602,19 +597,8 @@ export default function EtatSalaires({ entreprise, profil }) {
                     <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'salaire_net_avant_deduction'))}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'retenue_effort_guerre'))}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'avance_salaire'))}</td>
-                    <td style={{ textAlign: 'right', color: '#16A34A' }}>{fmt(totalNet)}</td>
-                  </tr>
-
-                  {/* Ligne Taxe Patronale d'Apprentissage */}
-                  <tr style={{ background: '#FFF8EC', borderTop: '1px solid #E5E5E5' }}>
-                    <td />
-                    <td colSpan={7} style={{ fontStyle: 'italic', color: '#735C00', fontSize: 11 }}>
-                      Taxe Patronale d'Apprentissage (3% de la masse brute)
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#735C00' }}>
-                      {fmt(totalTPA)}
-                    </td>
-                    <td colSpan={8} />
+                    <td style={{ textAlign: 'right' }}>{fmt(totalNet)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(totalTPA)}</td>
                   </tr>
                 </>
               )}
