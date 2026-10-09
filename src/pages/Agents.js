@@ -1,374 +1,1018 @@
-// BulletinPreview.js - Bulletin de paie format Excel FASO ARMORED
-// Layout identique au modèle Excel fourni
+// Agents.js - HR agents management page
+// Features: search, filters, add/edit/delete, document generation, Excel import/export
 
-import React from 'react';
-// formatFCFA importé pour compatibilité externe si besoin
+import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { age, formatDate, getInitials, avatarColor, joursRestants } from '../lib/helpers';
+import { peutFaire } from '../lib/useProfil';
+import * as XLSX from 'xlsx';
+import {
+  Search, SlidersHorizontal, Download, Upload,
+  Plus, Eye, Pencil, Trash2, FileText,
+  X, Save, AlertTriangle, Award,
+  CalendarCheck, CalendarOff, Wallet,
+} from 'lucide-react';
+import {
+  generateAttestation, generateConge,
+  generateAvance, generateCDI, generateCDD,
+} from '../lib/generatePDF';
 
+// ── Constants ─────────────────────────────────────────────
+const CATEGORIES = [
+  'Cadre supérieur', 'Cadre', 'Agent de maîtrise',
+  'Employé qualifié', 'Employé non qualifié',
+  'Ouvrier qualifié', 'Ouvrier non qualifié',
+];
 
-// ── Styles de base ────────────────────────────────────────
-const BASE = {
-  fontFamily: "'Arial', sans-serif",
-  fontSize: 11,
-  color: '#1A1A1A',
+const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
+
+const EMPTY_FORM = {
+  matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
+  lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
+  nombre_enfants: 0, charges_familiales: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
+  email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
+  diplome: '', specialite: '', poste: '', departement: '',
+  categorie_socioprofessionnelle: '', type_contrat: 'CDI',
+  date_embauche: '', date_fin_contrat: '', salaire_brut: '',
+  indemnite_logement: 0, indemnite_transport: 0, indemnite_fonction: 0,
+  sursalaire: 0, statut: 'Actif',
 };
 
-const CELL = {
-  border: '1px solid #999',
-  padding: '3px 6px',
-  fontSize: 11,
-  verticalAlign: 'middle',
-};
+// ── Document types config ─────────────────────────────────
+const DOC_TYPES = [
+  { type: 'cdi',         Icon: FileText,      titre: 'Contrat CDI',            desc: 'Contrat à durée indéterminée', color: '#2563EB' },
+  { type: 'cdd',         Icon: FileText,      titre: 'Contrat CDD',            desc: 'Contrat à durée déterminée',   color: '#D97706' },
+  { type: 'attestation', Icon: Award,         titre: 'Attestation de travail', desc: 'Certifie l\'emploi',           color: '#16A34A' },
+  { type: 'conge',       Icon: CalendarCheck, titre: 'Autorisation de congé',  desc: 'Congés payés',                 color: '#8B5CF6' },
+  { type: 'absence',     Icon: CalendarOff,   titre: 'Autorisation d\'absence', desc: 'Absence ponctuelle',          color: '#EC4899' },
+  { type: 'avance',      Icon: Wallet,        titre: 'Avance sur salaire',     desc: 'Demande d\'avance',            color: '#E8920A' },
+];
 
-const CELL_BOLD = { ...CELL, fontWeight: 700 };
-const CELL_ITALIC = { ...CELL, fontStyle: 'italic' };
-const CELL_RIGHT = { ...CELL, textAlign: 'right' };
-const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
-const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
-
-// Cellule sans bordure gauche/droite pour les lignes de regroupement
-function fmt(v) {
-  if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
-  const n = parseFloat(v);
-  if (isNaN(n) || n === 0) return '';
-  return Math.round(n).toLocaleString('fr-FR');
+// ── Toast notification ────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const colors = { success: '#16A34A', error: '#DC2626', warning: '#D97706' };
+  const t = document.createElement('div');
+  t.style.cssText = `
+    position:fixed; bottom:24px; right:24px;
+    background:${colors[type] || colors.success};
+    color:#fff; padding:12px 20px; border-radius:10px;
+    font-size:13px; font-weight:600; z-index:9999;
+    font-family:Poppins,sans-serif;
+    box-shadow:0 4px 16px rgba(0,0,0,0.15);
+  `;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
 }
 
-export default function BulletinPreview({ form, preview, agent, entreprise }) {
-  if (!agent) {
-    return (
-      <div style={{
-        width: '100%', minHeight: 600,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#FAFAFA', borderRadius: 12,
-        border: '1px dashed #D4D4D4', color: '#A3A3A3', fontSize: 13,
-      }}>
-        Sélectionnez un agent pour afficher l'aperçu du bulletin
-      </div>
-    );
+// ── Form section title ────────────────────────────────────
+function FormSection({ title }) {
+  return (
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: '#E8920A',
+      textTransform: 'uppercase', letterSpacing: '0.8px',
+      margin: '22px 0 14px', paddingBottom: 8,
+      borderBottom: '2px solid #FEF3E2',
+      fontFamily: 'Poppins, sans-serif',
+    }}>
+      {title}
+    </div>
+  );
+}
+
+// ── Main Agents component ─────────────────────────────────
+export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, profil }) {
+  const [filters, setFilters] = useState({
+    search: '', type: '', poste: '', categorie: '', age: '',
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [editAgent, setEditAgent] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [loading, setLoading] = useState(false);
+  const [docModal, setDocModal] = useState(null);
+  const [step, setStep] = useState(1);
+  const [selected, setSelected] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  // ── Unique filter options ──
+  const postes = [...new Set(agents.map(a => a.poste))].sort();
+  const cats   = [...new Set(agents.map(a => a.categorie_socioprofessionnelle).filter(Boolean))].sort();
+
+  // ── Filter agents ──
+  const filtered = agents.filter(a => {
+    const name = `${a.prenom} ${a.nom} ${a.matricule || ''}`.toLowerCase();
+    if (filters.search && !name.includes(filters.search.toLowerCase())) return false;
+    if (filters.type && a.type_contrat !== filters.type) return false;
+    if (filters.poste && a.poste !== filters.poste) return false;
+    if (filters.categorie && a.categorie_socioprofessionnelle !== filters.categorie) return false;
+    if (filters.age) {
+      const a_ = age(a.date_naissance);
+      if (filters.age === '<30'   && a_ >= 30)              return false;
+      if (filters.age === '30-40' && (a_ < 30 || a_ > 40)) return false;
+      if (filters.age === '40-50' && (a_ < 40 || a_ > 50)) return false;
+      if (filters.age === '>50'   && a_ <= 50)              return false;
+    }
+    return true;
+  });
+
+  // ── Open add modal ──
+  function openAdd() {
+    setForm(EMPTY_FORM);
+    setEditAgent(null);
+    setModal(true);
   }
 
-  const moisIdx = (form.mois || 1) - 1;
-  const annee = form.annee || '';
+  // ── Open edit modal ──
+  function openEdit(a) {
+    setForm({
+      ...EMPTY_FORM, ...a,
+      salaire_brut:        a.salaire_brut || '',
+      sursalaire:          a.sursalaire || 0,
+      indemnite_logement:  a.indemnite_logement || 0,
+      indemnite_transport: a.indemnite_transport || 0,
+      indemnite_fonction:  a.indemnite_fonction || 0,
+      nombre_enfants:      a.nombre_enfants || 0,
+      charges_familiales:  a.charges_familiales || 0,
+      cnib:                a.cnib || '',
+    });
+    setEditAgent(a);
+    setModal(true);
+  }
 
-  // Calcul date début/fin du mois
-  const dateDebut = `01/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
-  const lastDay = new Date(annee, form.mois || 1, 0).getDate();
-  const dateFin = `${lastDay}/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
+  function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
-  const nomComplet = `${(agent.prenom || '').toUpperCase()} ${(agent.nom || '').toUpperCase()}`.trim();
+  // ── Save agent ──
+  async function handleSubmit() {
+    if (!form.nom || !form.prenom || !form.poste) {
+      showToast('Nom, prénom et poste sont obligatoires', 'error');
+      return;
+    }
+    setLoading(true);
+    const data = {
+      ...form,
+      matricule:           form.matricule || null,
+      cnib:                form.cnib || null,
+      salaire_brut:        form.salaire_brut ? parseFloat(form.salaire_brut) : null,
+      sursalaire:          parseFloat(form.sursalaire) || 0,
+      indemnite_logement:  parseFloat(form.indemnite_logement) || 0,
+      indemnite_transport: parseFloat(form.indemnite_transport) || 0,
+      indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
+      nombre_enfants:      parseInt(form.nombre_enfants) || 0,
+      charges_familiales:  parseInt(form.charges_familiales) || 0,
+      date_naissance:      form.date_naissance || null,
+      date_embauche:       form.date_embauche || null,
+      date_fin_contrat:    form.date_fin_contrat || null,
+    };
+    if (editAgent) {
+      const { error } = await supabase.from('agents').update(data).eq('id', editAgent.id);
+      if (error) showToast('Erreur lors de la modification', 'error');
+      else { showToast('Agent modifié avec succès'); setModal(false); onRefresh(); }
+    } else {
+      const { error } = await supabase.from('agents').insert(data);
+      if (error) showToast('Erreur lors de l\'ajout', 'error');
+      else { showToast('Agent ajouté avec succès'); setModal(false); onRefresh(); }
+    }
+    setLoading(false);
+  }
 
-  // Date d'embauche
-  const dateEmb = agent.date_embauche
-    ? new Date(agent.date_embauche).toLocaleDateString('fr-FR')
-    : '—';
+  // ── Delete agent ──
+  async function handleDelete(id) {
+    if (!window.confirm('Supprimer cet agent ? Cette action est irréversible.')) return;
+    await supabase.from('agents').delete().eq('id', id);
+    showToast('Agent supprimé');
+    onRefresh();
+  }
 
-  // Calcul ancienneté
-  let anciennete = '-';
-  if (agent.date_embauche) {
-    const emb = new Date(agent.date_embauche);
-    const ref = new Date(annee, moisIdx, 1);
-    const moisAnc = (ref.getFullYear() - emb.getFullYear()) * 12 + (ref.getMonth() - emb.getMonth());
-    if (moisAnc >= 12) {
-      const ans = Math.floor(moisAnc / 12);
-      anciennete = `${ans} an${ans > 1 ? 's' : ''}`;
-    } else if (moisAnc > 0) {
-      anciennete = `${moisAnc} mois`;
+  // ── Delete selected agents ──
+  async function handleDeleteSelected() {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Supprimer ${selected.size} agent(s) ? Cette action est irréversible.`)) return;
+    setDeleting(true);
+    const ids = [...selected];
+    const { error } = await supabase.from('agents').delete().in('id', ids);
+    if (error) showToast('Erreur lors de la suppression', 'error');
+    else { showToast(`${ids.length} agent(s) supprimé(s)`); setSelected(new Set()); onRefresh(); }
+    setDeleting(false);
+  }
+
+  // ── Toggle select all (filtered agents) ──
+  function toggleSelectAll() {
+    if (selected.size === filtered.length && filtered.length > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(a => a.id)));
     }
   }
 
-  const p = preview || {};
+  // ── Toggle single agent ──
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
-  // Exonérations : plafond calculable vs retenu réel
-  const exoLogementPlafond = p.exo_logement != null ? fmt(Math.min(
-    (p.salaire_brut_imposable || 0) * 0.20, 75000
-  )) : '';
-  const exoTransportPlafond = p.exo_transport != null ? fmt(Math.min(
-    (p.salaire_brut_imposable || 0) * 0.05, 30000
-  )) : '';
-  const exoFonctionPlafond = p.exo_fonction != null ? fmt(Math.min(
-    (p.salaire_brut_imposable || 0) * 0.05, 50000
-  )) : '';
+  // ── Generate document ──
+  async function generateDoc(type, a) {
+    if (!entreprise || !entreprise.nom) {
+      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      return;
+    }
+    try {
+      if (type === 'cdi')          await generateCDI(a, entreprise);
+      else if (type === 'cdd')     await generateCDD(a, entreprise);
+      else if (type === 'attestation') await generateAttestation(a, entreprise);
+      else if (type === 'conge')   await generateConge(a, entreprise);
+      else if (type === 'avance')  await generateAvance(a, entreprise);
+      showToast('PDF généré et téléchargé');
+      setDocModal(null);
+    } catch (e) {
+      showToast('Erreur lors de la génération du PDF', 'error');
+    }
+  }
+
+// ── Convert Excel date to ISO string ──
+function excelDateToISO(val) {
+  if (!val) return null;
+  if (val === '' || val === 'undefined') return null;
+
+  // Already ISO format YYYY-MM-DD
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+
+  // Format DD/MM/YYYY
+  if (typeof val === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(val)) {
+    const [d, m, y] = val.split('/');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
+  // Format DD-MM-YYYY
+  if (typeof val === 'string' && /^\d{1,2}-\d{1,2}-\d{4}$/.test(val)) {
+    const [d, m, y] = val.split('-');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
+  // Excel serial number (e.g. 46023)
+  if (typeof val === 'number' || (typeof val === 'string' && !isNaN(val))) {
+    const serial = parseInt(val);
+    // Excel epoch starts 1900-01-01 (with leap year bug)
+    const date = new Date((serial - 25569) * 86400 * 1000);
+    if (isNaN(date.getTime())) return null;
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    // Sanity check - year must be reasonable
+    if (y < 1900 || y > 2100) return null;
+    return `${y}-${m}-${d}`;
+  }
+
+  // JS Date object (when cellDates:true works)
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getUTCFullYear();
+    const m = String(val.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(val.getUTCDate()).padStart(2, '0');
+    if (y < 1900 || y > 2100) return null;
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+}
+
+// ── Export Excel ──
+function exportExcel() {
+  const data = agents.map(a => ({
+    'Matricule':        a.matricule || '',
+    'Nom':              a.nom,
+    'Prenom':           a.prenom,
+    'Sexe':             a.sexe || '',
+    'Date naissance':   a.date_naissance || '',
+    'Age':              age(a.date_naissance),
+    'Telephone':        a.telephone || '',
+    'Email':            a.email || '',
+    'Poste':            a.poste,
+    'Departement':      a.departement || '',
+    'Categorie':        a.categorie_socioprofessionnelle || '',
+    'Type contrat':     a.type_contrat,
+    'Date embauche':    a.date_embauche || '',
+    'Date fin contrat': a.date_fin_contrat || '',
+    'Salaire brut':     a.salaire_brut || '',
+    'Statut':           a.statut || 'Actif',
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  try {
+    const wb = XLSX.utils.book_new();
+    wb.SheetNames.push('Agents');
+    wb.Sheets['Agents'] = ws;
+    XLSX.writeFile(wb, 'agents_export.xlsx');
+    showToast('Export Excel téléchargé');
+  } catch (e) {
+    console.error('Export error:', e);
+    showToast('Erreur lors de l\'export', 'error');
+  }
+}
+
+// ── Import Excel ──
+function importExcel(file) {
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const wb   = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    // Read as raw arrays to handle merged cells (row 3 = headers, row 4+ = data)
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+    const headers = rows[2] || []; // row index 2 = Excel row 3
+    const dataRows = rows.slice(3);  // row index 3+ = data
+
+    // Build objects from headers + rows manually
+    const data = dataRows.map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h || `__EMPTY_${i}`] = row[i] ?? '';
+      });
+      return obj;
+    }).filter(r => Object.values(r).some(v => v !== ''));
+
+    console.log('Colonnes détectées:', headers);
+    console.log('Première ligne:', data[0]);
+
+    let ok = 0;
+    let errors = 0;
+
+    for (const row of data) {
+      // Normalize keys
+      const r = {};
+      Object.keys(row).forEach(k => {
+        const normalized = k.trim().toLowerCase()
+          .replace(/[\n\r]+/g, ' ')      // newlines → space (e.g. "Date embauche\n(JJ/MM/AAAA)")
+          .replace(/\s+/g, ' ')          // collapse multiple spaces
+          .replace(/[éèêë]/g, 'e')
+          .replace(/[àâ]/g, 'a')
+          .replace(/[îï]/g, 'i')
+          .replace(/[ôö]/g, 'o')
+          .replace(/[ûü]/g, 'u')
+          .replace(/[ç]/g, 'c')
+          .replace(/\(.*?\)/g, '')       // strip parentheses like (JJ/MM/AAAA) or (FCFA)
+          .replace(/n°/g, 'n')
+          .trim();
+        r[normalized] = row[k];
+      });
+
+      // Map to agent fields
+      const parseNum = v => v ? parseFloat(String(v).replace(/\s/g, '').replace(',', '.')) || 0 : 0;
+
+      // Normalize type_contrat: handle STAGIAIRE → Stagiaire, uppercase variants
+      const rawType = (r['type contrat'] || r['contrat'] || 'CDI').toString().trim();
+      const normalizeType = t => {
+        const u = t.toUpperCase();
+        if (u === 'STAGIAIRE') return 'Stagiaire';
+        if (u === 'VDP') return 'VDP';
+        if (u === 'CDD') return 'CDD';
+        return 'CDI';
+      };
+      const typeContrat = normalizeType(rawType);
+      const isHorsPayroll = typeContrat === 'VDP' || typeContrat === 'Stagiaire';
+
+      const agent = {
+        nom:       (r['nom'] || r['name'] || '').toString().trim(),
+        prenom:    (r['prenom'] || r['prenoms'] || r['first name'] || '').toString().trim(),
+        matricule: r['matricule'] || r['mat'] || null,
+        sexe:      r['sexe'] || r['genre'] || null,
+        date_naissance:   excelDateToISO(r['date naissance'] || r['dob'] || r['naissance']),
+        lieu_naissance:   r['lieu naissance'] || r['lieu'] || null,
+        nationalite:      r['nationalite'] || 'Burkinabè',
+        telephone:        r['telephone'] || r['tel'] || null,
+        email:            r['email'] || r['mail'] || null,
+        adresse:          r['adresse'] || r['address'] || null,
+        nin:              r['nin'] || null,
+        cnib:             r['n cnib'] || r['cnib'] || r['numero cnib'] || null,
+        cnss:             r['cnss'] || null,
+        poste:            (r['poste'] || r['fonction'] || r['job'] || '').toString().trim(),
+        departement:      r['departement'] || r['service'] || null,
+        categorie_socioprofessionnelle: r['categorie sociopro'] || r['categorie'] || r['cat'] || null,
+        type_contrat:     typeContrat,
+        date_embauche:    excelDateToISO(r['date embauche'] || r['embauche'] || r['date d\'embauche']),
+        date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
+        // VDP/Stagiaire : salaire et indemnités à 0, pas de cotisations
+        salaire_brut:     isHorsPayroll ? null : (parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null),
+        sursalaire:       isHorsPayroll ? 0 : parseNum(r['sursalaire']),
+        indemnite_logement:  isHorsPayroll ? 0 : parseNum(r['indem logement'] || r['indemnite logement']),
+        indemnite_transport: isHorsPayroll ? 0 : parseNum(r['indem transport'] || r['indemnite transport']),
+        indemnite_fonction:  isHorsPayroll ? 0 : parseNum(r['indem fonction'] || r['indemnite fonction']),
+        statut:           r['statut'] || 'Actif',
+      };
+
+      // Clean empty strings to null
+      Object.keys(agent).forEach(k => {
+        if (agent[k] === '' || agent[k] === 'undefined') agent[k] = null;
+      });
+
+      // Skip header/banner rows
+      const nomStr = (agent.nom || '').toUpperCase();
+      const isHeader = !agent.nom || nomStr.includes('TEMPLATE') || nomStr.includes('IDENTITE') || nomStr.includes('NOM');
+      if (agent.nom && !isHeader) {
+        const { error } = await supabase.from('agents').insert(agent);
+        if (!error) ok++;
+        else {
+          errors++;
+          console.error('Erreur insertion:', error.message, agent);
+        }
+      } else {
+        console.warn('Ligne ignorée (nom manquant):', row);
+      }
+    }
+
+    if (ok > 0)    showToast(`${ok} agent(s) importé(s) avec succès`);
+    if (errors > 0) showToast(`${errors} ligne(s) en erreur — vérifiez la console`, 'warning');
+    if (ok === 0 && errors === 0) showToast('Aucun agent importé — vérifiez les colonnes', 'warning');
+
+    onRefresh();
+  };
+  reader.readAsBinaryString(file);
+}
 
   return (
-    <div
-      id="bulletin-printable"
-      style={{
-        ...BASE,
-        width: '100%',
-        background: '#fff',
-        padding: '20px 24px',
-        boxSizing: 'border-box',
-      }}
-    >
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: '35%' }} />
-          <col style={{ width: '35%' }} />
-          <col style={{ width: '30%' }} />
-        </colgroup>
-        <tbody>
+    <div>
 
-          {/* ── Titre ── */}
-          <tr>
-            <td colSpan={3} style={{
-              ...CELL,
-              textAlign: 'center',
-              fontWeight: 700,
-              fontSize: 12,
-              background: '#F5C6C6',
-              padding: '5px 8px',
-            }}>
-              BULLETIN DE PAIE DE {nomComplet}
-            </td>
-          </tr>
-
-          {/* ── Période ── */}
-          <tr>
-            <td style={{ ...CELL, borderRight: 'none' }}>Période du :</td>
-            <td colSpan={2} style={{ ...CELL, borderLeft: 'none' }}>
-              {dateDebut} AU {dateFin}
-            </td>
-          </tr>
-
-          {/* ── En-têtes colonnes ── */}
-          <tr>
-            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employeur :</td>
-            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Organisme social</td>
-            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employé</td>
-          </tr>
-
-          {/* ── Infos employeur / CNSS / employé ── */}
-          <tr>
-            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
-              <div style={{ fontWeight: 700 }}>{entreprise?.nom || 'FASO ARMORED'}</div>
-              {entreprise?.telephone && <div>Tél: {entreprise.telephone}</div>}
-              {entreprise?.rccm && <div>RCCM: {entreprise.rccm}</div>}
-              {entreprise?.ifu && <div>IFU: {entreprise.ifu}</div>}
-              <div style={{ marginTop: 4 }}>Date d'embauche</div>
-              <div>{dateEmb}</div>
-            </td>
-            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
-              <div>Caisse Nationale de Sécurité Sociale (CNSS)</div>
-              {entreprise?.cnss_employeur && <div>N° : {entreprise.cnss_employeur}</div>}
-            </td>
-            <td style={{ ...CELL, verticalAlign: 'top', fontWeight: 700 }}>
-              {nomComplet}
-              {agent.cnss && <div style={{ fontWeight: 400, marginTop: 4 }}>CNSS : {agent.cnss}</div>}
-            </td>
-          </tr>
-
-          {/* ── Emploi / Catégorie / Charges / Ancienneté ── */}
-          <tr>
-            <td style={CELL}>Emploi</td>
-            <td style={CELL}>Catégorie</td>
-            <td style={CELL}>Charges familiales &nbsp;&nbsp;&nbsp; Ancienneté</td>
-          </tr>
-          <tr>
-            <td style={CELL_BOLD}>{(agent.poste || '').toUpperCase()}</td>
-            <td style={CELL_BOLD}>{(agent.categorie || agent.type_contrat || '').toUpperCase()}</td>
-            <td style={CELL_BOLD}>
-              {p.personnes_a_charge || 0}
-              <span style={{ float: 'right', fontWeight: 400 }}>{anciennete}</span>
-            </td>
-          </tr>
-
-          {/* ── Salaire de base ── */}
-          <tr>
-            <td style={CELL_BOLD}>Salaire de base</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_BOLD}>{fmt(form.salaire_base)}</td>
-          </tr>
-
-          {/* ── Indemnités ── */}
-          <tr>
-            <td style={{ ...CELL, borderBottom: 'none' }}>Indemnités</td>
-            <td style={CELL}></td>
-            <td style={CELL}></td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
-            <td style={CELL}></td>
-            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_logement) > 0 ? '#F0F4EC' : undefined }}>
-              {fmt(form.indemnite_logement)}
-            </td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(form.indemnite_transport)}</td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- fonction</td>
-            <td style={CELL}></td>
-            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_fonction) > 0 ? '#F0F4EC' : undefined }}>
-              {fmt(form.indemnite_fonction)}
-            </td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- autre</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>
-              {fmt((parseFloat(form.sursalaire) || 0) + (parseFloat(form.prime_anciennete) || 0) + (parseFloat(form.autres_primes) || 0) + (parseFloat(form.heures_sup) || 0))}
-            </td>
-          </tr>
-
-          {/* ── Salaire brut ── */}
-          <tr>
-            <td style={CELL_BOLD}>Salaire brut</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut)}</td>
-          </tr>
-
-          {/* ── CNSS ── */}
-          <tr>
-            <td style={CELL_ITALIC}>CNSS</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.cnss_salarial)}</td>
-          </tr>
-
-          {/* ── Salaire imposable ── */}
-          <tr>
-            <td style={CELL}>Salaire imposable</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(p.salaire_imposable_affiche != null ? p.salaire_imposable_affiche : (p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0))}</td>
-          </tr>
-
-          {/* ── Contrôle CNSS fiscal ── */}
-          <tr>
-            <td style={CELL_ITALIC}>Contrôle CNSS (fiscal)</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.controle_cnss_fiscal)}</td>
-          </tr>
-
-          {/* ── Salaire imposable IUTS ── */}
-          <tr>
-            <td style={CELL_BOLD}>Salaire imposable IUTS</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut_imposable)}</td>
-          </tr>
-
-          {/* ── Contrôle des indemnités ── */}
-          <tr>
-            <td style={{ ...CELL, borderBottom: 'none' }}>Contrôle des indemnités</td>
-            <td style={CELL}></td>
-            <td style={CELL}></td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
-            <td style={{ ...CELL, textAlign: 'right' }}>{exoLogementPlafond}</td>
-            <td style={CELL_RIGHT}>{fmt(p.exo_logement)}</td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
-            <td style={{ ...CELL, textAlign: 'right' }}>{exoTransportPlafond}</td>
-            <td style={CELL_RIGHT}>{fmt(p.exo_transport)}</td>
-          </tr>
-          <tr>
-            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- fonction</td>
-            <td style={{ ...CELL, textAlign: 'right' }}>{exoFonctionPlafond}</td>
-            <td style={CELL_RIGHT}>{fmt(p.exo_fonction)}</td>
-          </tr>
-
-          {/* ── Total exonérations ── */}
-          <tr>
-            <td style={CELL_ITALIC}>Total exonérations</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.total_exonerations)}</td>
-          </tr>
-
-          {/* ── Abattement forfaitaire ── */}
-          <tr>
-            <td style={CELL_ITALIC}>Abattement forf.</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.abattement_forfaitaire)}</td>
-          </tr>
-
-          {/* ── Base IUTS ── */}
-          <tr>
-            <td style={CELL}>Base IUTS</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(p.base_iuts)}</td>
-          </tr>
-
-          {/* ── IUTS ── */}
-          <tr>
-            <td style={CELL_ITALIC}>IUTS</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts_brut)}</td>
-          </tr>
-
-          {/* ── Personnes à charge ── */}
-          <tr>
-            <td style={CELL}>Personnes à charge</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(p.personnes_a_charge)}</td>
-          </tr>
-
-          {/* ── Abattement familial ── */}
-          <tr>
-            <td style={CELL}>Abattement</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(p.abattement_familial)}</td>
-          </tr>
-
-          {/* ── Net IUTS ── */}
-          <tr>
-            <td style={CELL_ITALIC}>Net IUTS</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts)}</td>
-          </tr>
-
-          {/* ── Retenues ── */}
-          <tr>
-            <td style={CELL}>Retenues acomptes</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}></td>
-          </tr>
-          <tr>
-            <td style={CELL}>Retenues prêts</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}></td>
-          </tr>
-          <tr>
-            <td style={CELL}>Autres retenues</td>
-            <td style={CELL}></td>
-            <td style={CELL_RIGHT}>
-              {(() => {
-                const ar = parseFloat(form.autres_retenues) || 0;
-                const av = parseFloat(form.avance_salaire) || 0;
-                return fmt(ar + av);
-              })()}
-            </td>
-          </tr>
-
-          {/* ── Salaire net ── */}
-          <tr>
-            <td style={{ ...CELL_BOLD, fontSize: 12 }}>Salaire net</td>
-            <td style={CELL}></td>
-            <td style={{ ...CELL_RIGHT_BOLD, fontSize: 12 }}>{fmt(p.salaire_net)}</td>
-          </tr>
-
-        </tbody>
-      </table>
-
-      {/* ── Signatures ── */}
+      {/* ── Toolbar ── */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr',
-        marginTop: 24, gap: 20,
+        display: 'flex', alignItems: 'center',
+        gap: 10, marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 11 }}>Le Responsable RH</div>
-          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
-            {entreprise?.representant || '—'}
-          </div>
+
+        {/* Search */}
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={15} style={{
+            position: 'absolute', left: 12, top: '50%',
+            transform: 'translateY(-50%)', color: '#A3A3A3',
+          }} />
+          <input
+            className="search-input"
+            placeholder="Rechercher un agent..."
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            style={{ paddingLeft: 36, width: '100%' }}
+          />
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 700, fontSize: 11 }}>L'employé</div>
-          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
-            {nomComplet}
-          </div>
+
+        {/* Filter toggle */}
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => setShowFilters(!showFilters)}
+          style={{
+            borderColor: showFilters ? '#E8920A' : undefined,
+            color: showFilters ? '#E8920A' : undefined,
+          }}
+        >
+          <SlidersHorizontal size={14} />
+          Filtres
+          {Object.values(filters).filter((v, i) => i > 0 && v).length > 0 && (
+            <span style={{
+              background: '#E8920A', color: '#fff',
+              borderRadius: '50%', width: 16, height: 16,
+              fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {Object.values(filters).filter((v, i) => i > 0 && v).length}
+            </span>
+          )}
+        </button>
+
+        {/* Export */}
+        <button className="btn btn-secondary btn-sm" onClick={exportExcel}>
+          <Download size={14} />
+          Exporter
+        </button>
+
+        {/* Import */}
+        <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+          <Upload size={14} />
+          Importer
+          <input
+            type="file" accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={e => importExcel(e.target.files[0])}
+          />
+        </label>
+
+        {/* Delete selected */}
+        {peutFaire(profil, 'supprimerAgents') && selected.size > 0 && (
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={handleDeleteSelected}
+            disabled={deleting}
+          >
+            <Trash2 size={14} />
+            {deleting ? 'Suppression...' : `Supprimer (${selected.size})`}
+          </button>
+        )}
+
+        {/* Add agent */}
+        {peutFaire(profil, 'modifierAgents') && (
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
+            <Plus size={14} />
+            Nouvel agent
+          </button>
+        )}
+      </div>
+
+      {/* ── Filters panel ── */}
+      {showFilters && (
+        <div style={{
+          background: '#FAFAFA', border: '1px solid #E5E5E5',
+          borderRadius: 12, padding: '16px 20px',
+          marginBottom: 20,
+          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
+        }}>
+          <select
+            className="filter-select"
+            value={filters.type}
+            onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
+          >
+            <option value="">Tous les contrats</option>
+            <option value="CDI">CDI</option>
+            <option value="CDD">CDD</option>
+            <option value="VDP">VDP</option>
+            <option value="Stagiaire">Stagiaire</option>
+          </select>
+
+          <select
+            className="filter-select"
+            value={filters.poste}
+            onChange={e => setFilters(f => ({ ...f, poste: e.target.value }))}
+          >
+            <option value="">Tous les postes</option>
+            {postes.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+
+          <select
+            className="filter-select"
+            value={filters.categorie}
+            onChange={e => setFilters(f => ({ ...f, categorie: e.target.value }))}
+          >
+            <option value="">Toutes catégories</option>
+            {cats.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          <select
+            className="filter-select"
+            value={filters.age}
+            onChange={e => setFilters(f => ({ ...f, age: e.target.value }))}
+          >
+            <option value="">Tous les âges</option>
+            <option value="<30">Moins de 30 ans</option>
+            <option value="30-40">30 — 40 ans</option>
+            <option value="40-50">40 — 50 ans</option>
+            <option value=">50">Plus de 50 ans</option>
+          </select>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setFilters({ search: '', type: '', poste: '', categorie: '', age: '' })}
+          >
+            <X size={13} />
+            Réinitialiser
+          </button>
+        </div>
+      )}
+
+      {/* ── Agents table ── */}
+      <div className="card">
+        <div className="card-header">
+          <h3>
+            {filtered.length} agent(s)
+            {filtered.length !== agents.length && (
+              <span style={{ fontSize: 12, color: '#A3A3A3', fontWeight: 400, marginLeft: 6 }}>
+                sur {agents.length} au total
+              </span>
+            )}
+            {selected.size > 0 && (
+              <span style={{
+                fontSize: 12, color: '#E8920A', fontWeight: 600, marginLeft: 10,
+                background: '#FFF3E0', padding: '2px 8px', borderRadius: 6,
+              }}>
+                {selected.size} sélectionné(s)
+              </span>
+            )}
+          </h3>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selected.size === filtered.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
+                    title="Tout sélectionner"
+                  />
+                </th>
+                <th>Agent</th>
+                <th>Poste</th>
+                <th>Département</th>
+                <th>Catégorie</th>
+                <th>Contrat</th>
+                <th>Embauche</th>
+                <th>Âge</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan="10" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                    Aucun agent trouvé
+                  </td>
+                </tr>
+              ) : filtered.map(a => {
+                const c = avatarColor(a.nom);
+                const jours = joursRestants(a.date_fin_contrat);
+                const isExpiring = a.type_contrat === 'CDD' && jours !== null && jours <= 30 && jours >= 0;
+                const isSelected = selected.has(a.id);
+                return (
+                  <tr key={a.id} style={{ background: isSelected ? '#FFF8F0' : undefined }}>
+                    <td style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(a.id)}
+                        style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="avatar" style={{ background: c.bg, color: c.fg }}>
+                          {getInitials(a.nom, a.prenom)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
+                            {a.prenom} {a.nom}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#A3A3A3' }}>
+                            {a.matricule || '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ color: '#404040' }}>{a.poste}</td>
+                    <td style={{ color: '#737373' }}>{a.departement || '—'}</td>
+                    <td style={{ color: '#737373' }}>{a.categorie_socioprofessionnelle || '—'}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span className={`badge ${
+                          a.type_contrat === 'CDI'       ? 'badge-blue' :
+                          a.type_contrat === 'CDD'       ? 'badge-orange' :
+                          a.type_contrat === 'VDP'       ? 'badge-purple' :
+                          a.type_contrat === 'Stagiaire' ? 'badge-teal' :
+                          'badge-gray'
+                        }`}>
+                          {a.type_contrat}
+                        </span>
+                        {isExpiring && (
+                          <span className="badge badge-red" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <AlertTriangle size={10} /> Expire
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ color: '#737373' }}>{formatDate(a.date_embauche)}</td>
+                    <td style={{ color: '#737373' }}>{age(a.date_naissance)}</td>
+                    <td>
+                      <span className={`badge ${a.statut === 'Actif' ? 'badge-green' : 'badge-gray'}`}>
+                        {a.statut || 'Actif'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onOpenFiche(a.id)}
+                          title="Voir la fiche"
+                        >
+                          <Eye size={13} />
+                        </button>
+                        {peutFaire(profil, 'modifierAgents') && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => openEdit(a)}
+                            title="Modifier"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setDocModal(a)}
+                          title="Générer un document"
+                        >
+                          <FileText size={13} />
+                        </button>
+                        {peutFaire(profil, 'supprimerAgents') && (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDelete(a.id)}
+                            title="Supprimer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* ════════════════════════════════
+    MODAL: Add / Edit agent (multi-step)
+════════════════════════════════ */}
+{modal && (
+  <div className="modal-overlay" onClick={e => {
+    if (e.target === e.currentTarget) { setModal(false); setEditAgent(null); setStep(1); }
+  }}>
+    <div className="modal">
+      <div className="modal-header">
+        <div>
+          <h3>{editAgent ? 'Modifier l\'agent' : 'Nouvel agent'}</h3>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            {[
+              { n: 1, label: 'Identité' },
+              { n: 2, label: 'Coordonnées' },
+              { n: 3, label: 'Formation' },
+              { n: 4, label: 'Poste & Contrat' },
+            ].map(s => (
+              <div
+                key={s.n}
+                onClick={() => setStep(s.n)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  cursor: 'pointer',
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  fontSize: 11, fontWeight: 600,
+                  fontFamily: 'Poppins, sans-serif',
+                  background: step === s.n ? '#E8920A' : step > s.n ? '#FEF3E2' : '#F5F5F5',
+                  color: step === s.n ? '#fff' : step > s.n ? '#E8920A' : '#A3A3A3',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%',
+                  background: step === s.n ? 'rgba(255,255,255,0.3)' : step > s.n ? '#E8920A' : '#E5E5E5',
+                  color: step === s.n ? '#fff' : step > s.n ? '#fff' : '#A3A3A3',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700,
+                }}>
+                  {step > s.n ? '✓' : s.n}
+                </div>
+                {s.label}
+              </div>
+            ))}
+          </div>
+        </div>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => { setModal(false); setEditAgent(null); setStep(1); }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="modal-body">
+
+        {/* ── Step 1: Personal info ── */}
+        {step === 1 && (
+          <div>
+            <FormSection title="Informations personnelles" />
+            <div className="form-grid">
+              <div className="form-group"><label>Matricule</label><input value={form.matricule} onChange={e => setF('matricule', e.target.value)} placeholder="Ex: AG001" /></div>
+              <div className="form-group"><label>Nom *</label><input value={form.nom} onChange={e => setF('nom', e.target.value)} placeholder="Ex: OUEDRAOGO" /></div>
+              <div className="form-group"><label>Prénom(s) *</label><input value={form.prenom} onChange={e => setF('prenom', e.target.value)} placeholder="Ex: Jean" /></div>
+              <div className="form-group">
+                <label>Sexe</label>
+                <select value={form.sexe} onChange={e => setF('sexe', e.target.value)}>
+                  <option value="">—</option>
+                  <option>Masculin</option>
+                  <option>Féminin</option>
+                </select>
+              </div>
+              <div className="form-group"><label>Date de naissance</label><input type="date" value={form.date_naissance} onChange={e => setF('date_naissance', e.target.value)} /></div>
+              <div className="form-group"><label>Lieu de naissance</label><input value={form.lieu_naissance} onChange={e => setF('lieu_naissance', e.target.value)} placeholder="Ex: Ouagadougou" /></div>
+              <div className="form-group"><label>Nationalité</label><input value={form.nationalite} onChange={e => setF('nationalite', e.target.value)} /></div>
+              <div className="form-group">
+                <label>Situation matrimoniale</label>
+                <select value={form.situation_matrimoniale} onChange={e => setF('situation_matrimoniale', e.target.value)}>
+                  <option value="">—</option>
+                  {SITUATIONS.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
+              <div className="form-group"><label>Charges familiales (personnes à charge)</label><input type="number" min="0" max="7" value={form.charges_familiales} onChange={e => setF('charges_familiales', e.target.value)} placeholder="0 à 7" /></div>
+              <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
+              <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
+              <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Contact ── */}
+        {step === 2 && (
+          <div>
+            <FormSection title="Coordonnées" />
+            <div className="form-grid">
+              <div className="form-group full">
+                <label>Adresse complète</label>
+                <input value={form.adresse} onChange={e => setF('adresse', e.target.value)} placeholder="Ex: Secteur 12, Ouagadougou" />
+              </div>
+              <div className="form-group"><label>Téléphone principal</label><input value={form.telephone} onChange={e => setF('telephone', e.target.value)} placeholder="Ex: +226 70 00 00 00" /></div>
+              <div className="form-group"><label>Email professionnel</label><input type="email" value={form.email} onChange={e => setF('email', e.target.value)} placeholder="Ex: jean@entreprise.bf" /></div>
+            </div>
+
+            <FormSection title="Personne à contacter en cas d'urgence" />
+            <div className="form-grid">
+              <div className="form-group"><label>Nom complet</label><input value={form.urgence_nom} onChange={e => setF('urgence_nom', e.target.value)} placeholder="Nom et prénom" /></div>
+              <div className="form-group"><label>Téléphone urgence</label><input value={form.urgence_telephone} onChange={e => setF('urgence_telephone', e.target.value)} placeholder="Ex: +226 70 00 00 00" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Education ── */}
+        {step === 3 && (
+          <div>
+            <FormSection title="Formation et qualifications" />
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Niveau d'études</label>
+                <select value={form.niveau_etudes} onChange={e => setF('niveau_etudes', e.target.value)}>
+                  <option value="">—</option>
+                  {['Sans diplôme', 'CEPE', 'BEPC', 'CAP/BEP', 'Baccalauréat', 'BTS/DUT', 'Licence', 'Master', 'Doctorat'].map(n =>
+                    <option key={n}>{n}</option>
+                  )}
+                </select>
+              </div>
+              <div className="form-group"><label>Diplôme obtenu</label><input value={form.diplome} onChange={e => setF('diplome', e.target.value)} placeholder="Ex: Licence en Droit" /></div>
+              <div className="form-group full"><label>Spécialité / Filière</label><input value={form.specialite} onChange={e => setF('specialite', e.target.value)} placeholder="Ex: Droit du travail" /></div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Job & Contract ── */}
+        {step === 4 && (
+          <div>
+            <FormSection title="Poste & Contrat" />
+            <div className="form-grid">
+              <div className="form-group"><label>Intitulé du poste *</label><input value={form.poste} onChange={e => setF('poste', e.target.value)} placeholder="Ex: Comptable" /></div>
+              <div className="form-group"><label>Département / Service</label><input value={form.departement} onChange={e => setF('departement', e.target.value)} placeholder="Ex: Finance" /></div>
+              <div className="form-group">
+                <label>Catégorie socioprofessionnelle</label>
+                <select value={form.categorie_socioprofessionnelle} onChange={e => setF('categorie_socioprofessionnelle', e.target.value)}>
+                  <option value="">—</option>
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Type de contrat *</label>
+                <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)}>
+                  <option value="CDI">CDI</option>
+                  <option value="CDD">CDD</option>
+                  <option value="VDP">VDP (hors paie)</option>
+                  <option value="Stagiaire">Stagiaire (hors paie)</option>
+                </select>
+              </div>
+              <div className="form-group"><label>Date d'embauche</label><input type="date" value={form.date_embauche} onChange={e => setF('date_embauche', e.target.value)} /></div>
+              <div className="form-group"><label>Date fin contrat (CDD)</label><input type="date" value={form.date_fin_contrat} onChange={e => setF('date_fin_contrat', e.target.value)} /></div>
+              <div className="form-group">
+                <label>Statut</label>
+                <select value={form.statut} onChange={e => setF('statut', e.target.value)}>
+                  <option value="Actif">Actif</option>
+                  <option value="Inactif">Inactif</option>
+                </select>
+              </div>
+            </div>
+
+            <FormSection title="Rémunération mensuelle (FCFA)" />
+            <div className="form-grid">
+              <div className="form-group"><label>Salaire de base *</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
+              <div className="form-group"><label>Sursalaire</label><input type="number" value={form.sursalaire} onChange={e => setF('sursalaire', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. logement</label><input type="number" value={form.indemnite_logement} onChange={e => setF('indemnite_logement', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. transport</label><input type="number" value={form.indemnite_transport} onChange={e => setF('indemnite_transport', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. de fonction</label><input type="number" value={form.indemnite_fonction} onChange={e => setF('indemnite_fonction', e.target.value)} placeholder="0" /></div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer navigation ── */}
+      <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+        <button
+          className="btn btn-secondary"
+          onClick={() => step > 1 ? setStep(step - 1) : (setModal(false), setEditAgent(null), setStep(1))}
+        >
+          {step === 1 ? <><X size={14} /> Annuler</> : <>← Précédent</>}
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Step dots */}
+          {[1,2,3,4].map(n => (
+            <div
+              key={n}
+              onClick={() => setStep(n)}
+              style={{
+                width: n === step ? 20 : 8,
+                height: 8, borderRadius: 4,
+                background: n === step ? '#E8920A' : n < step ? '#FDDBA0' : '#E5E5E5',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            />
+          ))}
+        </div>
+
+        {step < 4 ? (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              if (step === 1 && (!form.nom || !form.prenom)) {
+                showToast('Nom et prénom sont obligatoires', 'error');
+                return;
+              }
+              setStep(step + 1);
+            }}
+          >
+            Suivant →
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
+            <Save size={14} />
+            {loading ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+      {/* ════════════════════════════════
+          MODAL: Document generation
+      ════════════════════════════════ */}
+      {docModal && (
+        <div className="modal-overlay" onClick={e => {
+          if (e.target === e.currentTarget) setDocModal(null);
+        }}>
+          <div className="modal" style={{ width: 500 }}>
+            <div className="modal-header">
+              <div>
+                <h3>Générer un document</h3>
+                <p style={{ fontSize: 12, color: '#A3A3A3', marginTop: 2, fontFamily: 'Poppins, sans-serif' }}>
+                  {docModal.prenom} {docModal.nom} — {docModal.poste}
+                </p>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => setDocModal(null)}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {DOC_TYPES.map(d => {
+                  const Icon = d.Icon;
+                  return (
+                    <div
+                      key={d.type}
+                      className="doc-card"
+                      onClick={() => generateDoc(d.type, docModal)}
+                    >
+                      <div style={{
+                        width: 48, height: 48, borderRadius: 12,
+                        background: `${d.color}15`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 10px',
+                      }}>
+                        <Icon size={22} color={d.color} strokeWidth={1.8} />
+                      </div>
+                      <h4>{d.titre}</h4>
+                      <p>{d.desc}</p>
+                      <div style={{
+                        marginTop: 10, fontSize: 11,
+                        color: d.color, fontWeight: 600,
+                        display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', gap: 4,
+                      }}>
+                        <Download size={11} /> PDF
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
