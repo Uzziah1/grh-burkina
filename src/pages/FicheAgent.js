@@ -167,12 +167,16 @@ export default function FicheAgent({ agentId, entreprise, onBack }) {
             {/* Avatar */}
             <div style={{
               width: 68, height: 68, borderRadius: 18,
-              background: c.bg, color: c.fg,
+              background: agent.photo_url ? 'transparent' : c.bg, color: c.fg,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 22, fontWeight: 800, flexShrink: 0,
               fontFamily: 'Poppins, sans-serif',
+              overflow: 'hidden', border: agent.photo_url ? '2px solid #E5E5E5' : 'none',
             }}>
-              {getInitials(agent.nom, agent.prenom)}
+              {agent.photo_url
+                ? <img src={agent.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : getInitials(agent.nom, agent.prenom)
+              }
             </div>
 
             {/* Info */}
