@@ -994,6 +994,17 @@ export default function Paie({ agents, entreprise, profil }) {
     loadBulletins();
   }
 
+  // ── Delete all bulletins of current month/year ──
+  async function handleDeleteTous() {
+    if (bulletins.length === 0) return;
+    if (!window.confirm(`Supprimer les ${bulletins.length} bulletin(s) de ${MOIS[filterMois - 1]} ${filterAnnee} ?\nLes avances liées seront réinitialisées. Cette action est irréversible.`)) return;
+    const ids = bulletins.map(b => b.id);
+    await supabase.from('avances').update({ deduite_bulletin_id: null }).in('deduite_bulletin_id', ids);
+    await supabase.from('bulletins_paie').delete().in('id', ids);
+    showToast(`${ids.length} bulletin(s) supprimé(s)`);
+    loadBulletins();
+  }
+
   // ── Filter bulletins ──
   const filtered = bulletins.filter(b => {
     if (!search) return true;
@@ -1076,6 +1087,16 @@ export default function Paie({ agents, entreprise, profil }) {
             : 'Générer et enregistrer tous'
           }
         </button>
+        {bulletins.length > 0 && (
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={handleDeleteTous}
+            title={`Supprimer tous les bulletins de ${MOIS[filterMois - 1]} ${filterAnnee}`}
+          >
+            <Trash2 size={14} />
+            Supprimer tous
+          </button>
+        )}
         <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
           <Plus size={14} />
           Nouveau bulletin
@@ -1168,12 +1189,12 @@ export default function Paie({ agents, entreprise, profil }) {
                       </div>
                     </td>
                     <td style={{ fontWeight: 600 }}>{formatFCFA(b.salaire_brut)}</td>
-                    <td style={{ color: '#DC2626' }}>{formatFCFA(b.cnss_salarial)}</td>
-                    <td style={{ color: '#DC2626' }}>{formatFCFA(b.iuts)}</td>
-                    <td style={{ color: b.avance_salaire > 0 ? '#D97706' : '#A3A3A3' }}>
+                    <td>{formatFCFA(b.cnss_salarial)}</td>
+                    <td>{formatFCFA(b.iuts)}</td>
+                    <td style={{ color: b.avance_salaire > 0 ? '#0F0F0F' : '#A3A3A3' }}>
                       {b.avance_salaire > 0 ? formatFCFA(b.avance_salaire) : '—'}
                     </td>
-                    <td style={{ fontWeight: 700, color: '#16A34A', fontSize: 14 }}>{formatFCFA(b.salaire_net)}</td>
+                    <td style={{ fontWeight: 700, fontSize: 14 }}>{formatFCFA(b.salaire_net)}</td>
                     <td>
                       <span className={`badge ${b.statut === 'Validé' ? 'badge-green' : 'badge-orange'}`}>
                         {b.statut}
