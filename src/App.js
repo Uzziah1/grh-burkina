@@ -68,24 +68,24 @@ export default function App() {
 
   if (!user) return <Login onLogin={setUser} />;
 
-  const pages = {
-    dashboard: <Dashboard agents={agents} onOpenFiche={openFiche} />,
-    agents: <Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} />,
-    contrats: <Contrats agents={agents} onOpenFiche={openFiche} />,
-    conges: <Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />,
-    avances: <Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />,
-    paie: <Paie agents={agents} onRefresh={loadData} profil={profil} />,
-    documents: <Documents agents={agents} entreprise={entreprise} profil={profil} />,
-    etatSalaires: <EtatSalaires entreprise={entreprise} profil={profil} />,
-    historique: <Historique />,
-    entreprise: <Entreprise onRefresh={loadData} />,
-    fiche: <FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} profil={profil} />,
-    utilisateurs: <Utilisateurs profil={profil} />,
-  };
+  // Toutes les pages sont montées une seule fois et masquées/affichées par CSS
+  // pour que les états (modaux ouverts, formulaires en cours) survivent aux changements de page
+  const show = id => ({ display: page === id ? 'contents' : 'none' });
 
   return (
     <Layout page={page} setPage={setPage} user={user} profil={profil} onLogout={() => supabase.auth.signOut()}>
-      {pages[page] || pages.dashboard}
+      <div style={show('dashboard')}><Dashboard agents={agents} onOpenFiche={openFiche} /></div>
+      <div style={show('agents')}><Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} /></div>
+      <div style={show('contrats')}><Contrats agents={agents} onOpenFiche={openFiche} /></div>
+      <div style={show('conges')}><Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
+      <div style={show('avances')}><Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
+      <div style={show('paie')}><Paie agents={agents} onRefresh={loadData} profil={profil} /></div>
+      <div style={show('documents')}><Documents agents={agents} entreprise={entreprise} profil={profil} /></div>
+      <div style={show('etatSalaires')}><EtatSalaires entreprise={entreprise} profil={profil} /></div>
+      <div style={show('historique')}><Historique /></div>
+      <div style={show('entreprise')}><Entreprise onRefresh={loadData} /></div>
+      <div style={show('fiche')}><FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} profil={profil} /></div>
+      <div style={show('utilisateurs')}><Utilisateurs profil={profil} /></div>
     </Layout>
   );
 }
