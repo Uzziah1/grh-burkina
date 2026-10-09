@@ -29,7 +29,7 @@ const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
 const EMPTY_FORM = {
   matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
   lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
-  nombre_enfants: 0, charges_familiales: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
+  charges_familiales: 0, photo_url: '', cnib: '', cnss: '', adresse: '', telephone: '',
   email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
   diplome: '', specialite: '', poste: '', departement: '',
   categorie_socioprofessionnelle: '', type_contrat: 'CDI',
@@ -132,8 +132,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       indemnite_logement:  a.indemnite_logement || 0,
       indemnite_transport: a.indemnite_transport || 0,
       indemnite_fonction:  a.indemnite_fonction || 0,
-      nombre_enfants:      a.nombre_enfants || 0,
       charges_familiales:  a.charges_familiales || 0,
+      photo_url:           a.photo_url || '',
       cnib:                a.cnib || '',
     });
     setEditAgent(a);
@@ -158,8 +158,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       indemnite_logement:  parseFloat(form.indemnite_logement) || 0,
       indemnite_transport: parseFloat(form.indemnite_transport) || 0,
       indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
-      nombre_enfants:      parseInt(form.nombre_enfants) || 0,
-      charges_familiales:  parseInt(form.charges_familiales) || 0,
+      charges_familiales:  Math.min(parseInt(form.charges_familiales) || 0, 4),
+      photo_url:           form.photo_url || null,
       date_naissance:      form.date_naissance || null,
       date_embauche:       form.date_embauche || null,
       date_fin_contrat:    form.date_fin_contrat || null,
@@ -645,8 +645,11 @@ function importExcel(file) {
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: c.bg, color: c.fg }}>
-                          {getInitials(a.nom, a.prenom)}
+                        <div className="avatar" style={{ background: c.bg, color: c.fg, overflow: 'hidden', padding: 0 }}>
+                          {a.photo_url
+                            ? <img src={a.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : getInitials(a.nom, a.prenom)
+                          }
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
@@ -791,6 +794,42 @@ function importExcel(file) {
         {step === 1 && (
           <div>
             <FormSection title="Informations personnelles" />
+            {/* ── Photo de profil ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              <div style={{
+                width: 80, height: 80, borderRadius: '50%', overflow: 'hidden',
+                border: '2px solid #E5E5E5', background: '#F5F5F5',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {form.photo_url
+                  ? <img src={form.photo_url} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 28, color: '#A3A3A3' }}>👤</span>
+                }
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#404040', display: 'block', marginBottom: 6 }}>Photo de profil</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ fontSize: 12 }}
+                  onChange={async e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const { supabase: sb } = await import('../lib/supabase');
+                    const path = `agents/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+                    const { error } = await sb.storage.from('photos').upload(path, file, { upsert: true });
+                    if (error) { alert('Erreur upload photo : ' + error.message); return; }
+                    const { data: urlData } = sb.storage.from('photos').getPublicUrl(path);
+                    setF('photo_url', urlData.publicUrl);
+                  }}
+                />
+                {form.photo_url && (
+                  <button type="button" style={{ fontSize: 11, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}
+                    onClick={() => setF('photo_url', '')}>Supprimer la photo</button>
+                )}
+              </div>
+            </div>
             <div className="form-grid">
               <div className="form-group"><label>Matricule</label><input value={form.matricule} onChange={e => setF('matricule', e.target.value)} placeholder="Ex: AG001" /></div>
               <div className="form-group"><label>Nom *</label><input value={form.nom} onChange={e => setF('nom', e.target.value)} placeholder="Ex: OUEDRAOGO" /></div>
@@ -813,9 +852,7 @@ function importExcel(file) {
                   {SITUATIONS.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
-              <div className="form-group"><label>Charges familiales (personnes à charge)</label><input type="number" min="0" max="7" value={form.charges_familiales} onChange={e => setF('charges_familiales', e.target.value)} placeholder="0 à 7" /></div>
-              <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
+              <div className="form-group"><label>Charges familiales (personnes à charge)</label><input type="number" min="0" max="4" value={form.charges_familiales} onChange={e => setF('charges_familiales', e.target.value)} placeholder="0 à 4" /></div>
               <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
               <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
             </div>

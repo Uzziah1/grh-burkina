@@ -31,8 +31,18 @@ const EXO_TRANSPORT_PLAFOND = 30000;
 const EXO_FONCTION_TAUX    = 0.05;
 const EXO_FONCTION_PLAFOND = 50000;
 
-// ── Flat-rate allowance ───────────────────────────────────
-const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
+// ── Flat-rate allowance (by category) ────────────────────
+// Ouvriers: 25%, Agents de maîtrise & Cadres: 20%
+const ABATTEMENT_FORFAITAIRE_TAUX_OUVRIER = 0.25;
+const ABATTEMENT_FORFAITAIRE_TAUX_CADRE   = 0.20;
+
+function getAbattementTaux(categorie) {
+  const cat = (categorie || '').toLowerCase();
+  if (cat.includes('cadre') || cat.includes('maîtrise') || cat.includes('maitrise')) {
+    return ABATTEMENT_FORFAITAIRE_TAUX_CADRE;
+  }
+  return ABATTEMENT_FORFAITAIRE_TAUX_OUVRIER;
+}
 
 // ── IUTS progressive brackets (monthly taxable base) ──────
 const IUTS_BAREME = [
@@ -48,16 +58,13 @@ const IUTS_BAREME = [
 ];
 
 // ── Family charge abatement rates ─────────────────────────
-// charges_familiales = nombre direct de personnes à charge (champ agent)
+// charges_familiales = nombre direct de personnes à charge (max 4)
 const ABATTEMENT_CHARGES = {
   0: 0,
   1: 0.08,
   2: 0.10,
   3: 0.12,
   4: 0.14,
-  5: 0.16,
-  6: 0.18,
-  7: 0.20,
 };
 
 // ── Calculate CNSS employee contribution (capped) ─────────
@@ -91,7 +98,7 @@ export function calculerIUTSBrut(baseIUTS) {
 
 // ── Calculate family charge abatement on gross IUTS ───────
 export function calculerAbattementFamilial(iutsBrut, chargesFamiliales) {
-  const charges = Math.min(parseInt(chargesFamiliales) || 0, 7);
+  const charges = Math.min(parseInt(chargesFamiliales) || 0, 4);
   const taux = ABATTEMENT_CHARGES[charges] || 0;
   return iutsBrut * taux;
 }
@@ -99,17 +106,18 @@ export function calculerAbattementFamilial(iutsBrut, chargesFamiliales) {
 // ── Full payroll calculation ───────────────────────────────
 export function calculerBulletin(data) {
   const {
-    salaire_base          = 0,
-    sursalaire            = 0,
-    indemnite_logement    = 0,
-    indemnite_transport   = 0,
-    indemnite_fonction    = 0,
-    prime_anciennete      = 0,
-    autres_primes         = 0,
-    heures_sup            = 0,
-    autres_retenues       = 0,
-    avance_salaire        = 0,
-    charges_familiales    = 0,  // champ direct de l'agent
+    salaire_base                   = 0,
+    sursalaire                     = 0,
+    indemnite_logement             = 0,
+    indemnite_transport            = 0,
+    indemnite_fonction             = 0,
+    prime_anciennete               = 0,
+    autres_primes                  = 0,
+    heures_sup                     = 0,
+    autres_retenues                = 0,
+    avance_salaire                 = 0,
+    charges_familiales             = 0,  // champ direct de l'agent
+    categorie_socioprofessionnelle = '',  // pour abattement forfaitaire
   } = data;
 
   const sBase         = parseFloat(salaire_base) || 0;
@@ -122,7 +130,7 @@ export function calculerBulletin(data) {
   const sHeuresSup    = parseFloat(heures_sup) || 0;
   const sAutresRet    = parseFloat(autres_retenues) || 0;
   const sAvance       = parseFloat(avance_salaire) || 0;
-  const nCharges      = Math.min(parseInt(charges_familiales) || 0, 7);
+  const nCharges      = Math.min(parseInt(charges_familiales) || 0, 4);
 
   // ── Step 1: Salaire brut ──
   const salaire_brut = sBase + sSursalaire + sLogement + sTransport
@@ -155,8 +163,8 @@ export function calculerBulletin(data) {
   );
   const total_exonerations = exo_logement + exo_transport + exo_fonction;
 
-  // ── Step 6: Abattement forfaitaire ──
-  const abattement_forfaitaire = sBase * ABATTEMENT_FORFAITAIRE_TAUX;
+  // ── Step 6: Abattement forfaitaire (selon catégorie) ──
+  const abattement_forfaitaire = sBase * getAbattementTaux(categorie_socioprofessionnelle);
 
   // ── Step 7: Base IUTS (arrondie à la centaine inférieure) ──
   const baseIutsRaw = salaire_brut_imposable - total_exonerations - abattement_forfaitaire;
@@ -209,11 +217,11 @@ export function calculerBulletin(data) {
 export function calculerPersonnesACharge(situationMatrimoniale, nombreEnfants = 0) {
   let charges = 0;
   if (situationMatrimoniale === 'Marié(e)') charges += 1;
-  charges += Math.min(parseInt(nombreEnfants) || 0, 6);
-  return Math.min(charges, 7);
+  charges += Math.min(parseInt(nombreEnfants) || 0, 4);
+  return Math.min(charges, 5);
 }
 
-export const MAX_ENFANTS_CHARGE = 6;
+export const MAX_ENFANTS_CHARGE = 4;
 
 // ── Format FCFA amount ────────────────────────────────────
 export function formatFCFA(montant) {

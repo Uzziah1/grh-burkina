@@ -157,15 +157,18 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
             </td>
           </tr>
 
-          {/* ── Emploi / Catégorie / Charges / Ancienneté ── */}
+          {/* ── Emploi / Catégorie / Charges familiales / Ancienneté ── */}
           <tr>
             <td style={CELL}>Emploi</td>
-            <td style={CELL}>Catégorie</td>
-            <td style={CELL}>Charges familiales &nbsp;&nbsp;&nbsp; Ancienneté</td>
+            <td style={CELL}>Catégorie socioprofessionnelle</td>
+            <td style={CELL}>
+              <span>Charges familiales</span>
+              <span style={{ float: 'right' }}>Ancienneté</span>
+            </td>
           </tr>
           <tr>
             <td style={CELL_BOLD}>{(agent.poste || '').toUpperCase()}</td>
-            <td style={CELL_BOLD}>{(agent.categorie || agent.type_contrat || '').toUpperCase()}</td>
+            <td style={CELL_BOLD}>{(agent.categorie_socioprofessionnelle || agent.categorie || agent.type_contrat || '').toUpperCase()}</td>
             <td style={CELL_BOLD}>
               {p.personnes_a_charge || 0}
               <span style={{ float: 'right', fontWeight: 400 }}>{anciennete}</span>
