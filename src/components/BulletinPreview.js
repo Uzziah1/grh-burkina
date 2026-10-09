@@ -248,11 +248,10 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
           <TotalRow label="TOTAL RETENUES" value={preview?.total_retenues} />
 
           {/* Other deductions */}
-          {preview && (parseFloat(form.autres_retenues) > 0 || preview.retenue_effort_guerre > 0 || parseFloat(form.avance_salaire) > 0) && (
+          {preview && (parseFloat(form.autres_retenues) > 0 || parseFloat(form.avance_salaire) > 0) && (
             <>
               <Band label="Autres déductions" />
               {parseFloat(form.autres_retenues) > 0 && <Row label="Autres retenues" value={form.autres_retenues} />}
-              <Row label="Retenue 1% (effort de guerre)" value={preview.retenue_effort_guerre} />
               {parseFloat(form.avance_salaire) > 0 && <Row label="Avance sur salaire" value={form.avance_salaire} />}
             </>
           )}
