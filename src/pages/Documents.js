@@ -1,12 +1,13 @@
 // Documents.js - Document generation page
-// Features: agent selection, PDF generation (CDI, CDD, Attestation only)
+// Features: agent selection, PDF generation
 
 import React, { useState } from 'react';
 import {
   generateAttestation, generateCDI, generateCDD,
+  generateAutorisationAbsence, generateAutorisation,
 } from '../lib/generatePDF';
 import {
-  Download, FileText, Award,
+  Download, FileText, Award, ClipboardList, ShieldCheck,
   AlertCircle, ChevronRight, User,
 } from 'lucide-react';
 
@@ -49,6 +50,20 @@ const DOC_TYPES = [
     desc:  'Certifie l\'emploi de l\'agent',
     icon:  Award,
     color: '#16A34A',
+  },
+  {
+    type:  'autorisation_absence',
+    titre: 'Autorisation d\'absence',
+    desc:  'Autorisation de s\'absenter du poste',
+    icon:  ClipboardList,
+    color: '#7C3AED',
+  },
+  {
+    type:  'autorisation',
+    titre: 'Autorisation',
+    desc:  'Document d\'autorisation générique',
+    icon:  ShieldCheck,
+    color: '#0891B2',
   },
 ];
 
@@ -139,9 +154,11 @@ export default function Documents({ agents, entreprise }) {
     }
     setGenerating(type);
     try {
-      if (type === 'cdi')              await generateCDI(agent, entreprise);
-      else if (type === 'cdd')         await generateCDD(agent, entreprise);
-      else if (type === 'attestation') await generateAttestation(agent, entreprise);
+      if (type === 'cdi')                      await generateCDI(agent, entreprise);
+      else if (type === 'cdd')                 await generateCDD(agent, entreprise);
+      else if (type === 'attestation')         await generateAttestation(agent, entreprise);
+      else if (type === 'autorisation_absence') await generateAutorisationAbsence(agent, entreprise);
+      else if (type === 'autorisation')         await generateAutorisation(agent, entreprise);
       showToast('PDF généré et téléchargé avec succès');
     } catch (e) {
       showToast('Erreur lors de la génération du PDF', 'error');
