@@ -667,12 +667,27 @@ function importExcel(file) {
                       {idx + 1}
                     </td>
                     <td>
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
-                          {a.prenom} {a.nom}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: '50%',
+                          background: a.photo_url ? 'transparent' : '#FEF3E2',
+                          border: '1.5px solid #E5E5E5',
+                          overflow: 'hidden', flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 13, fontWeight: 700, color: '#E8920A',
+                        }}>
+                          {a.photo_url
+                            ? <img src={a.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : `${(a.prenom || '').charAt(0)}${(a.nom || '').charAt(0)}`.toUpperCase()
+                          }
                         </div>
-                        <div style={{ fontSize: 11, color: '#A3A3A3' }}>
-                          {a.matricule || '—'}
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
+                            {a.prenom} {a.nom}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#A3A3A3' }}>
+                            {a.matricule || '—'}
+                          </div>
                         </div>
                       </div>
                     </td>
