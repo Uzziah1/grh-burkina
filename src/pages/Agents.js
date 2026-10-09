@@ -149,28 +149,48 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       return;
     }
     setLoading(true);
+    // Objet explicite — pas de spread pour éviter d'envoyer des champs inconnus à Supabase
     const data = {
-      ...form,
-      matricule:           form.matricule || null,
-      cnib:                form.cnib || null,
-      salaire_brut:        form.salaire_brut ? parseFloat(form.salaire_brut) : null,
-      sursalaire:          parseFloat(form.sursalaire) || 0,
-      indemnite_logement:  parseFloat(form.indemnite_logement) || 0,
-      indemnite_transport: parseFloat(form.indemnite_transport) || 0,
-      indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
-      charges_familiales:  Math.min(parseInt(form.charges_familiales) || 0, 4),
-      photo_url:           form.photo_url || null,
-      date_naissance:      form.date_naissance || null,
-      date_embauche:       form.date_embauche || null,
-      date_fin_contrat:    form.date_fin_contrat || null,
+      matricule:                      form.matricule || null,
+      nom:                            form.nom,
+      prenom:                         form.prenom,
+      sexe:                           form.sexe || null,
+      date_naissance:                 form.date_naissance || null,
+      lieu_naissance:                 form.lieu_naissance || null,
+      nationalite:                    form.nationalite || null,
+      situation_matrimoniale:         form.situation_matrimoniale || null,
+      charges_familiales:             Math.min(parseInt(form.charges_familiales) || 0, 4),
+      photo_url:                      form.photo_url || null,
+      cnib:                           form.cnib || null,
+      cnss:                           form.cnss || null,
+      adresse:                        form.adresse || null,
+      telephone:                      form.telephone || null,
+      email:                          form.email || null,
+      urgence_nom:                    form.urgence_nom || null,
+      urgence_telephone:              form.urgence_telephone || null,
+      niveau_etudes:                  form.niveau_etudes || null,
+      diplome:                        form.diplome || null,
+      specialite:                     form.specialite || null,
+      poste:                          form.poste,
+      departement:                    form.departement || null,
+      categorie_socioprofessionnelle: form.categorie_socioprofessionnelle || null,
+      type_contrat:                   form.type_contrat || null,
+      date_embauche:                  form.date_embauche || null,
+      date_fin_contrat:               form.date_fin_contrat || null,
+      salaire_brut:                   form.salaire_brut ? parseFloat(form.salaire_brut) : null,
+      indemnite_logement:             parseFloat(form.indemnite_logement) || 0,
+      indemnite_transport:            parseFloat(form.indemnite_transport) || 0,
+      indemnite_fonction:             parseFloat(form.indemnite_fonction) || 0,
+      sursalaire:                     parseFloat(form.sursalaire) || 0,
+      statut:                         form.statut || 'Actif',
     };
     if (editAgent) {
       const { error } = await supabase.from('agents').update(data).eq('id', editAgent.id);
-      if (error) showToast('Erreur lors de la modification', 'error');
+      if (error) showToast(`Erreur modification : ${error.message}`, 'error');
       else { showToast('Agent modifié avec succès'); setModal(false); onRefresh(); }
     } else {
       const { error } = await supabase.from('agents').insert(data);
-      if (error) showToast('Erreur lors de l\'ajout', 'error');
+      if (error) showToast(`Erreur ajout : ${error.message}`, 'error');
       else { showToast('Agent ajouté avec succès'); setModal(false); onRefresh(); }
     }
     setLoading(false);

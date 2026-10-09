@@ -21,7 +21,6 @@ const mainNavItems = [
   { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
   { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
   { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
-  { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
 { id: 'etatSalaires',  label: 'État des salaires', permission: 'voirEtatSalaires', icon: ClipboardList },
   { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
   { id: 'historique',   label: 'Journalisation',   permission: 'voirAgents',       icon: History },
