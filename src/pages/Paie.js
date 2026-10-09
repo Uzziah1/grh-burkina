@@ -261,6 +261,247 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
   doc.save(`bulletin_${agent.prenom}_${agent.nom}_${MOIS[bulletin.mois - 1]}_${bulletin.annee}.pdf`);
 }
 
+// ── Generate all bulletins in one multi-page PDF ──────────
+// One A4 page per agent; each page is a complete bulletin.
+// The function draws each bulletin onto the doc then adds a page break.
+function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+  const today = new Date().toLocaleDateString('fr-FR');
+  const NOIR = [26, 26, 26];
+  const GRIS = [115, 115, 115];
+  const GRIS_CLAIR = [240, 240, 240];
+  let y = 14;
+
+  if (entreprise?.logo_url) {
+    try { doc.addImage(entreprise.logo_url, 'PNG', 14, y - 2, 18, 18); } catch (e) {}
+  } else {
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.rect(14, y - 2, 18, 18);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(6);
+    doc.setTextColor(...GRIS);
+    doc.text('LOGO', 23, y + 7, { align: 'center' });
+  }
+  const tx = 36;
+  doc.setTextColor(...NOIR);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(entreprise?.nom || 'Entreprise', tx, y + 3);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRIS);
+  doc.text([
+    entreprise?.siege_social || '',
+    entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
+    entreprise?.cnss_employeur ? `CNSS: ${entreprise.cnss_employeur}` : '',
+  ].filter(Boolean).join('  |  '), tx, y + 9);
+  doc.setTextColor(...GRIS);
+  doc.setFontSize(8);
+  doc.text('Bulletin édité le', 196, y, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NOIR);
+  doc.text(today, 196, y + 5, { align: 'right' });
+  y += 22;
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(`BULLETIN DE PAIE — ${MOIS[mois - 1].toUpperCase()} ${annee}`, 105, y + 3, { align: 'center' });
+  y += 8;
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EMPLOYEUR', 17, y + 2);
+  doc.text('EMPLOYÉ(E)', 107, y + 2);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(entreprise?.nom || '—', 17, y + 8);
+  doc.text(`${agent.prenom} ${agent.nom}`, 107, y + 8);
+  doc.setFontSize(8);
+  doc.setTextColor(...GRIS);
+  doc.text(`Représenté par : ${entreprise?.representant || '—'}`, 17, y + 13);
+  doc.text(`${agent.poste || '—'}${agent.departement ? ' — ' + agent.departement : ''}`, 107, y + 13);
+  doc.text(`${entreprise?.qualite_representant || ''}`, 17, y + 18);
+  doc.text(`Matricule : ${agent.matricule || '—'} | CNSS : ${agent.cnss || '—'}`, 107, y + 18);
+  doc.setTextColor(...NOIR);
+  y += 24;
+  doc.setLineWidth(0.6);
+  doc.line(14, y, 196, y);
+  y += 2;
+
+  const band = (label) => {
+    doc.setFillColor(...NOIR);
+    doc.rect(14, y, 182, 6.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text(label.toUpperCase(), 17, y + 4.5);
+    doc.setTextColor(...NOIR);
+    y += 8.5;
+  };
+  const row = (label, val, opts = {}) => {
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(14, y + 5, 196, y + 5);
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
+    doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
+    doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
+    doc.setTextColor(...NOIR);
+    y += 6.2;
+  };
+  const totalRow = (label, val, big = false) => {
+    const h = big ? 9 : 7.5;
+    doc.setFillColor(...GRIS_CLAIR);
+    doc.rect(14, y, 182, h, 'F');
+    doc.setDrawColor(...NOIR);
+    doc.setLineWidth(0.5);
+    doc.line(14, y, 196, y);
+    doc.line(14, y + h, 196, y + h);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(big ? 12 : 10);
+    doc.text(label, 17, y + (big ? 6.3 : 5.2));
+    doc.text(Math.round(val).toLocaleString('fr-FR') + ' FCFA', 193, y + (big ? 6.3 : 5.2), { align: 'right' });
+    y += h + 3;
+  };
+
+  band('Éléments de rémunération');
+  const earnings = [
+    { label: 'Salaire de base',        val: bulletin.salaire_base },
+    { label: 'Sursalaire',             val: bulletin.sursalaire },
+    { label: 'Indemnité de logement',  val: bulletin.indemnite_logement },
+    { label: 'Indemnité de transport', val: bulletin.indemnite_transport },
+    { label: 'Indemnité de fonction',  val: bulletin.indemnite_fonction },
+    { label: 'Prime d\'ancienneté',    val: bulletin.prime_anciennete },
+    { label: 'Autres primes',          val: bulletin.autres_primes },
+    { label: 'Heures supplémentaires', val: bulletin.heures_sup },
+  ];
+  earnings.filter(e => e.val > 0).forEach(e => row(e.label, e.val));
+  totalRow('SALAIRE BRUT', bulletin.salaire_brut);
+  y += 2;
+
+  band('Base imposable IUTS');
+  row('Salaire imposable (brut - contrôle CNSS)', bulletin.salaire_brut_imposable, { muted: true });
+  row('Exonération logement', -bulletin.exo_logement, { indent: true, muted: true });
+  row('Exonération transport', -bulletin.exo_transport, { indent: true, muted: true });
+  row('Exonération fonction', -bulletin.exo_fonction, { indent: true, muted: true });
+  row('Abattement forfaitaire (25%)', -bulletin.abattement_forfaitaire, { indent: true, muted: true });
+  totalRow('BASE IUTS', bulletin.base_iuts);
+  y += 2;
+
+  band('Retenues');
+  row('CNSS salarié (5.5%, plafond 44 000)', bulletin.cnss_salarial);
+  row('IUTS brut', bulletin.iuts_brut);
+  row(`Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, -bulletin.abattement_familial, { indent: true, muted: true });
+  row('Net IUTS', bulletin.iuts);
+  totalRow('TOTAL RETENUES', bulletin.total_retenues);
+  y += 2;
+
+  band('Net à payer');
+  if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+  row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+  if (bulletin.avance_salaire > 0)    row('Avance sur salaire', bulletin.avance_salaire);
+  totalRow('NET À PAYER', bulletin.salaire_net, true);
+
+  doc.setFontSize(8);
+  doc.setTextColor(...GRIS);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 4);
+  doc.setTextColor(...NOIR);
+  y += 14;
+
+  if (y > 245) { doc.addPage(); y = 20; }
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(entreprise?.qualite_representant || 'L\'EMPLOYEUR', 40, y, { align: 'center' });
+  doc.text('L\'EMPLOYÉ(E)', 170, y, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRIS);
+  doc.text(entreprise?.mention_signataire || 'Cachet et signature', 40, y + 5, { align: 'center' });
+  doc.text('Lu et approuvé', 170, y + 5, { align: 'center' });
+  doc.setTextColor(...NOIR);
+  y += 22;
+  doc.setDrawColor(...NOIR);
+  doc.line(14, y, 70, y);
+  doc.line(130, y, 195, y);
+  doc.setFontSize(8);
+  doc.text(entreprise?.representant || '', 42, y + 4, { align: 'center' });
+  doc.text(`${agent.prenom} ${agent.nom}`, 162, y + 4, { align: 'center' });
+  y += 12;
+  doc.setFontSize(7);
+  doc.setTextColor(...GRIS);
+  if (entreprise?.pied_de_page) {
+    doc.text(entreprise.pied_de_page, 105, y, { align: 'center' });
+    y += 5;
+  }
+  doc.text(`Bulletin généré le ${today} — Document confidentiel`, 105, y, { align: 'center' });
+}
+
+async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress) {
+  // Filter agents eligible for payroll: not VDP/Stagiaire, embauche ≤ first of month
+  const firstOfMonth = new Date(annee, mois - 1, 1);
+  const eligible = (agents || []).filter(a => {
+    if (a.type_contrat === 'VDP' || a.type_contrat === 'Stagiaire') return false;
+    if (a.statut !== 'Actif') return false;
+    if (!a.date_embauche) return false;
+    return new Date(a.date_embauche) <= firstOfMonth;
+  });
+
+  if (eligible.length === 0) return { count: 0 };
+
+  const doc = new jsPDF();
+
+  for (let i = 0; i < eligible.length; i++) {
+    const agent = eligible[i];
+    if (i > 0) doc.addPage();
+    onProgress && onProgress(i + 1, eligible.length, agent);
+
+    const calc = calculerBulletin({
+      salaire_base:         agent.salaire_brut || 0,
+      sursalaire:           agent.sursalaire || 0,
+      indemnite_logement:   agent.indemnite_logement || 0,
+      indemnite_transport:  agent.indemnite_transport || 0,
+      indemnite_fonction:   agent.indemnite_fonction || 0,
+      prime_anciennete:     0,
+      autres_primes:        0,
+      heures_sup:           0,
+      autres_retenues:      0,
+      avance_salaire:       0,
+      situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
+      nombre_enfants:         agent.nombre_enfants || 0,
+    });
+
+    const bulletin = {
+      mois, annee,
+      salaire_base:         agent.salaire_brut || 0,
+      sursalaire:           agent.sursalaire || 0,
+      indemnite_logement:   agent.indemnite_logement || 0,
+      indemnite_transport:  agent.indemnite_transport || 0,
+      indemnite_fonction:   agent.indemnite_fonction || 0,
+      prime_anciennete: 0, autres_primes: 0, heures_sup: 0,
+      autres_retenues: 0,  avance_salaire: 0,
+      ...calc,
+    };
+
+    drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee);
+  }
+
+  doc.save(`bulletins_${MOIS[mois - 1]}_${annee}.pdf`);
+  return { count: eligible.length };
+}
+
 // ── Export bulletin to Excel ───────────────────────────────
 function exportBulletinExcel(form, preview, agent, entreprise) {
   const periode = `${MOIS[(form.mois || 1) - 1]} ${form.annee || ''}`;
@@ -333,6 +574,8 @@ export default function Paie({ agents, entreprise, profil }) {
   const [filterAnnee, setFilterAnnee] = useState(NOW.getFullYear());
   const [saving, setSaving] = useState(false);
   const [avancesAgent, setAvancesAgent] = useState([]);
+  const [generating, setGenerating] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState(null);
 
   const [form, setForm] = useState({
     agent_id: '',
@@ -371,6 +614,24 @@ export default function Paie({ agents, entreprise, profil }) {
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
+  // ── Generate all bulletins as one PDF ──
+  async function handleGenererTous() {
+    setGenerating(true);
+    setGenerateProgress({ current: 0, total: 0, nom: '' });
+    try {
+      const result = await generateBulletinsGroupesPDF(
+        filterMois, filterAnnee, agents, entreprise,
+        (current, total, agent) => setGenerateProgress({ current, total, nom: `${agent.prenom} ${agent.nom}` }),
+      );
+      if (result.count === 0) showToast('Aucun agent éligible pour cette période', 'warning');
+      else showToast(`${result.count} bulletin(s) généré(s) — PDF téléchargé`, 'success');
+    } catch (e) {
+      showToast('Erreur lors de la génération : ' + e.message, 'error');
+    }
+    setGenerating(false);
+    setGenerateProgress(null);
+  }
+
   // ── Print the on-screen bulletin preview ──
   function handlePrint() {
     const printContent = document.getElementById('bulletin-printable');
@@ -403,7 +664,11 @@ export default function Paie({ agents, entreprise, profil }) {
   async function prefillFromAgent(agentId) {
     const agent = agents.find(a => a.id === agentId);
     if (!agent) return;
-    setF('salaire_base', agent.salaire_brut || '');
+    setF('salaire_base',          agent.salaire_brut        || '');
+    setF('sursalaire',            agent.sursalaire          || 0);
+    setF('indemnite_logement',    agent.indemnite_logement  || 0);
+    setF('indemnite_transport',   agent.indemnite_transport || 0);
+    setF('indemnite_fonction',    agent.indemnite_fonction  || 0);
     setF('agent_id', agentId);
 
     // Fetch approved advances not yet deducted from any bulletin
@@ -562,6 +827,20 @@ export default function Paie({ agents, entreprise, profil }) {
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <div style={{ flex: 1 }} />
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={handleGenererTous}
+          disabled={generating}
+          title="Générer un PDF avec tous les bulletins du mois"
+        >
+          <FileText size={14} />
+          {generating
+            ? generateProgress?.total > 0
+              ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
+              : 'Génération…'
+            : 'Générer tous les bulletins'
+          }
+        </button>
         <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
           <Plus size={14} />
           Nouveau bulletin
