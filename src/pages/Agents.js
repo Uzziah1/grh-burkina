@@ -29,11 +29,13 @@ const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
 const EMPTY_FORM = {
   matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
   lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
-  nombre_enfants: 0, nin: '', cnss: '', adresse: '', telephone: '',
+  nombre_enfants: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
   email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
   diplome: '', specialite: '', poste: '', departement: '',
   categorie_socioprofessionnelle: '', type_contrat: 'CDI',
-  date_embauche: '', date_fin_contrat: '', salaire_brut: '', statut: 'Actif',
+  date_embauche: '', date_fin_contrat: '', salaire_brut: '',
+  indemnite_logement: 0, indemnite_transport: 0, indemnite_fonction: 0,
+  sursalaire: 0, statut: 'Actif',
 };
 
 // ── Document types config ─────────────────────────────────
@@ -123,8 +125,13 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   function openEdit(a) {
     setForm({
       ...EMPTY_FORM, ...a,
-      salaire_brut:   a.salaire_brut || '',
-      nombre_enfants: a.nombre_enfants || 0,
+      salaire_brut:        a.salaire_brut || '',
+      sursalaire:          a.sursalaire || 0,
+      indemnite_logement:  a.indemnite_logement || 0,
+      indemnite_transport: a.indemnite_transport || 0,
+      indemnite_fonction:  a.indemnite_fonction || 0,
+      nombre_enfants:      a.nombre_enfants || 0,
+      cnib:                a.cnib || '',
     });
     setEditAgent(a);
     setModal(true);
@@ -141,12 +148,17 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     setLoading(true);
     const data = {
       ...form,
-      matricule:        form.matricule || null,
-      salaire_brut:     form.salaire_brut ? parseFloat(form.salaire_brut) : null,
-      nombre_enfants:   parseInt(form.nombre_enfants) || 0,
-      date_naissance:   form.date_naissance || null,
-      date_embauche:    form.date_embauche || null,
-      date_fin_contrat: form.date_fin_contrat || null,
+      matricule:           form.matricule || null,
+      cnib:                form.cnib || null,
+      salaire_brut:        form.salaire_brut ? parseFloat(form.salaire_brut) : null,
+      sursalaire:          parseFloat(form.sursalaire) || 0,
+      indemnite_logement:  parseFloat(form.indemnite_logement) || 0,
+      indemnite_transport: parseFloat(form.indemnite_transport) || 0,
+      indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
+      nombre_enfants:      parseInt(form.nombre_enfants) || 0,
+      date_naissance:      form.date_naissance || null,
+      date_embauche:       form.date_embauche || null,
+      date_fin_contrat:    form.date_fin_contrat || null,
     };
     if (editAgent) {
       const { error } = await supabase.from('agents').update(data).eq('id', editAgent.id);
@@ -296,6 +308,7 @@ function importExcel(file) {
       });
 
       // Map to agent fields
+      const parseNum = v => v ? parseFloat(String(v).replace(/\s/g, '').replace(',', '.')) || 0 : 0;
       const agent = {
         nom:       (r['nom'] || r['name'] || '').toString().trim(),
         prenom:    (r['prenom'] || r['prenoms'] || r['first name'] || '').toString().trim(),
@@ -308,14 +321,19 @@ function importExcel(file) {
         email:            r['email'] || r['mail'] || null,
         adresse:          r['adresse'] || r['address'] || null,
         nin:              r['nin'] || null,
+        cnib:             r['n cnib'] || r['cnib'] || r['n° cnib'] || r['numero cnib'] || null,
         cnss:             r['cnss'] || null,
         poste:            (r['poste'] || r['fonction'] || r['job'] || '').toString().trim(),
         departement:      r['departement'] || r['service'] || null,
-        categorie_socioprofessionnelle: r['categorie'] || r['cat'] || null,
+        categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
         type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
         date_embauche:    excelDateToISO(r['date embauche'] || r['embauche']),
         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
-        salaire_brut:     r['salaire brut'] || r['salaire'] ? parseFloat(r['salaire brut'] || r['salaire']) || null : null,
+        salaire_brut:     parseNum(r['salaire de base (fcfa)'] || r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
+        sursalaire:       parseNum(r['sursalaire']),
+        indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
+        indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
+        indemnite_fonction:  parseNum(r['indem. fonction'] || r['indemnite fonction'] || r['indem fonction']),
         statut:           r['statut'] || 'Actif',
       };
 
@@ -434,6 +452,8 @@ function importExcel(file) {
             <option value="">Tous les contrats</option>
             <option value="CDI">CDI</option>
             <option value="CDD">CDD</option>
+            <option value="VDP">VDP</option>
+            <option value="Stagiaire">Stagiaire</option>
           </select>
 
           <select
@@ -536,7 +556,11 @@ function importExcel(file) {
                     <td style={{ color: '#737373' }}>{a.categorie_socioprofessionnelle || '—'}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span className={`badge ${a.type_contrat === 'CDI' ? 'badge-blue' : 'badge-orange'}`}>
+                        <span className={`badge ${
+                          a.type_contrat === 'CDI' ? 'badge-blue' :
+                          a.type_contrat === 'CDD' ? 'badge-orange' :
+                          'badge-gray'
+                        }`}>
                           {a.type_contrat}
                         </span>
                         {isExpiring && (
@@ -682,6 +706,7 @@ function importExcel(file) {
               </div>
               <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
               <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
+              <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
               <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
             </div>
           </div>
@@ -747,11 +772,12 @@ function importExcel(file) {
                 <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)}>
                   <option value="CDI">CDI</option>
                   <option value="CDD">CDD</option>
+                  <option value="VDP">VDP (hors paie)</option>
+                  <option value="Stagiaire">Stagiaire (hors paie)</option>
                 </select>
               </div>
               <div className="form-group"><label>Date d'embauche</label><input type="date" value={form.date_embauche} onChange={e => setF('date_embauche', e.target.value)} /></div>
               <div className="form-group"><label>Date fin contrat (CDD)</label><input type="date" value={form.date_fin_contrat} onChange={e => setF('date_fin_contrat', e.target.value)} /></div>
-              <div className="form-group"><label>Salaire brut mensuel (FCFA)</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
               <div className="form-group">
                 <label>Statut</label>
                 <select value={form.statut} onChange={e => setF('statut', e.target.value)}>
@@ -759,6 +785,15 @@ function importExcel(file) {
                   <option value="Inactif">Inactif</option>
                 </select>
               </div>
+            </div>
+
+            <FormSection title="Rémunération mensuelle (FCFA)" />
+            <div className="form-grid">
+              <div className="form-group"><label>Salaire de base *</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
+              <div className="form-group"><label>Sursalaire</label><input type="number" value={form.sursalaire} onChange={e => setF('sursalaire', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. logement</label><input type="number" value={form.indemnite_logement} onChange={e => setF('indemnite_logement', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. transport</label><input type="number" value={form.indemnite_transport} onChange={e => setF('indemnite_transport', e.target.value)} placeholder="0" /></div>
+              <div className="form-group"><label>Indem. de fonction</label><input type="number" value={form.indemnite_fonction} onChange={e => setF('indemnite_fonction', e.target.value)} placeholder="0" /></div>
             </div>
           </div>
         )}
