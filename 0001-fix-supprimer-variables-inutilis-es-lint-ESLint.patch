@@ -1,0 +1,74 @@
+From c99867c305800bc4537f88c83af0ceedcce5ee45 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 16:02:49 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20supprimer=20variables=20inutilis=C3=A9es?=
+ =?UTF-8?q?=20(lint=20ESLint)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js | 11 +----------
+ src/pages/Paie.js                 |  1 -
+ 2 files changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index 4f7147c..8cf1232 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -2,7 +2,7 @@
+ // Layout identique au modèle Excel fourni
+ 
+ import React from 'react';
+-import { formatFCFA } from '../lib/calcPaie';
++// formatFCFA importé pour compatibilité externe si besoin
+ 
+ const MOIS = [
+   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+@@ -30,8 +30,6 @@ const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
+ const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
+ 
+ // Cellule sans bordure gauche/droite pour les lignes de regroupement
+-const CELL_INNER = { ...CELL, borderLeft: 'none', borderRight: 'none' };
+-
+ function fmt(v) {
+   if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
+   const n = parseFloat(v);
+@@ -39,12 +37,6 @@ function fmt(v) {
+   return Math.round(n).toLocaleString('fr-FR');
+ }
+ 
+-function fmtNeg(v) {
+-  const n = parseFloat(v);
+-  if (!n || n === 0) return '';
+-  return Math.round(n).toLocaleString('fr-FR');
+-}
+-
+ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+   if (!agent) {
+     return (
+@@ -60,7 +52,6 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+   }
+ 
+   const moisIdx = (form.mois || 1) - 1;
+-  const moisLabel = MOIS[moisIdx];
+   const annee = form.annee || '';
+ 
+   // Calcul date début/fin du mois
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index f6941f6..d4c9dce 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -272,7 +272,6 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+   // Colonnes : L=14, col1=14..90, col2=90..150, col3=150..196
+   const L = 14, R = 196;
+   const C1 = 90, C2 = 150; // séparateurs colonnes
+-  const W = R - L; // 182
+ 
+   let y = 12;
+ 
+-- 
+2.43.0
+

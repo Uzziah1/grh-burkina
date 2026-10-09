@@ -1,0 +1,3089 @@
+From 7083785fe7e425feb69a86bc8cffc3e2c5c8ccf5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 02:22:16 +0000
+Subject: [PATCH 01/13] =?UTF-8?q?feat(agents):=20CNIB,=20VDP/Stagiaires,?=
+ =?UTF-8?q?=20indemnit=C3=A9s=20individuelles?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Ajout champ N° CNIB dans l'étape 1 (Identité) du formulaire agent
+- Ajout types de contrat VDP et Stagiaire (exclus de la paie)
+- Ajout section rémunération dans l'étape 4 : salaire de base, sursalaire,
+  indemnités logement/transport/fonction
+- Badge gris pour VDP/Stagiaire dans le tableau
+- Filtres contrats mis à jour (VDP, Stagiaire)
+- Import Excel mis à jour : mapping cnib, indemnités, catégorie sociopro.
+- handleSubmit et openEdit mis à jour avec les nouveaux champs
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Agents.js | 63 +++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 49 insertions(+), 14 deletions(-)
+
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index a7c684b..811085e 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -29,11 +29,13 @@ const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
+ const EMPTY_FORM = {
+   matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
+   lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
+-  nombre_enfants: 0, nin: '', cnss: '', adresse: '', telephone: '',
++  nombre_enfants: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
+   email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
+   diplome: '', specialite: '', poste: '', departement: '',
+   categorie_socioprofessionnelle: '', type_contrat: 'CDI',
+-  date_embauche: '', date_fin_contrat: '', salaire_brut: '', statut: 'Actif',
++  date_embauche: '', date_fin_contrat: '', salaire_brut: '',
++  indemnite_logement: 0, indemnite_transport: 0, indemnite_fonction: 0,
++  sursalaire: 0, statut: 'Actif',
+ };
+ 
+ // ── Document types config ─────────────────────────────────
+@@ -123,8 +125,13 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+   function openEdit(a) {
+     setForm({
+       ...EMPTY_FORM, ...a,
+-      salaire_brut:   a.salaire_brut || '',
+-      nombre_enfants: a.nombre_enfants || 0,
++      salaire_brut:        a.salaire_brut || '',
++      sursalaire:          a.sursalaire || 0,
++      indemnite_logement:  a.indemnite_logement || 0,
++      indemnite_transport: a.indemnite_transport || 0,
++      indemnite_fonction:  a.indemnite_fonction || 0,
++      nombre_enfants:      a.nombre_enfants || 0,
++      cnib:                a.cnib || '',
+     });
+     setEditAgent(a);
+     setModal(true);
+@@ -141,12 +148,17 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+     setLoading(true);
+     const data = {
+       ...form,
+-      matricule:        form.matricule || null,
+-      salaire_brut:     form.salaire_brut ? parseFloat(form.salaire_brut) : null,
+-      nombre_enfants:   parseInt(form.nombre_enfants) || 0,
+-      date_naissance:   form.date_naissance || null,
+-      date_embauche:    form.date_embauche || null,
+-      date_fin_contrat: form.date_fin_contrat || null,
++      matricule:           form.matricule || null,
++      cnib:                form.cnib || null,
++      salaire_brut:        form.salaire_brut ? parseFloat(form.salaire_brut) : null,
++      sursalaire:          parseFloat(form.sursalaire) || 0,
++      indemnite_logement:  parseFloat(form.indemnite_logement) || 0,
++      indemnite_transport: parseFloat(form.indemnite_transport) || 0,
++      indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
++      nombre_enfants:      parseInt(form.nombre_enfants) || 0,
++      date_naissance:      form.date_naissance || null,
++      date_embauche:       form.date_embauche || null,
++      date_fin_contrat:    form.date_fin_contrat || null,
+     };
+     if (editAgent) {
+       const { error } = await supabase.from('agents').update(data).eq('id', editAgent.id);
+@@ -296,6 +308,7 @@ function importExcel(file) {
+       });
+ 
+       // Map to agent fields
++      const parseNum = v => v ? parseFloat(String(v).replace(/\s/g, '').replace(',', '.')) || 0 : 0;
+       const agent = {
+         nom:       (r['nom'] || r['name'] || '').toString().trim(),
+         prenom:    (r['prenom'] || r['prenoms'] || r['first name'] || '').toString().trim(),
+@@ -308,14 +321,19 @@ function importExcel(file) {
+         email:            r['email'] || r['mail'] || null,
+         adresse:          r['adresse'] || r['address'] || null,
+         nin:              r['nin'] || null,
++        cnib:             r['n cnib'] || r['cnib'] || r['n° cnib'] || r['numero cnib'] || null,
+         cnss:             r['cnss'] || null,
+         poste:            (r['poste'] || r['fonction'] || r['job'] || '').toString().trim(),
+         departement:      r['departement'] || r['service'] || null,
+-        categorie_socioprofessionnelle: r['categorie'] || r['cat'] || null,
++        categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
+         type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
+         date_embauche:    excelDateToISO(r['date embauche'] || r['embauche']),
+         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
+-        salaire_brut:     r['salaire brut'] || r['salaire'] ? parseFloat(r['salaire brut'] || r['salaire']) || null : null,
++        salaire_brut:     parseNum(r['salaire de base (fcfa)'] || r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
++        sursalaire:       parseNum(r['sursalaire']),
++        indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
++        indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
++        indemnite_fonction:  parseNum(r['indem. fonction'] || r['indemnite fonction'] || r['indem fonction']),
+         statut:           r['statut'] || 'Actif',
+       };
+ 
+@@ -434,6 +452,8 @@ function importExcel(file) {
+             <option value="">Tous les contrats</option>
+             <option value="CDI">CDI</option>
+             <option value="CDD">CDD</option>
++            <option value="VDP">VDP</option>
++            <option value="Stagiaire">Stagiaire</option>
+           </select>
+ 
+           <select
+@@ -536,7 +556,11 @@ function importExcel(file) {
+                     <td style={{ color: '#737373' }}>{a.categorie_socioprofessionnelle || '—'}</td>
+                     <td>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+-                        <span className={`badge ${a.type_contrat === 'CDI' ? 'badge-blue' : 'badge-orange'}`}>
++                        <span className={`badge ${
++                          a.type_contrat === 'CDI' ? 'badge-blue' :
++                          a.type_contrat === 'CDD' ? 'badge-orange' :
++                          'badge-gray'
++                        }`}>
+                           {a.type_contrat}
+                         </span>
+                         {isExpiring && (
+@@ -682,6 +706,7 @@ function importExcel(file) {
+               </div>
+               <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
+               <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
++              <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
+               <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
+             </div>
+           </div>
+@@ -747,11 +772,12 @@ function importExcel(file) {
+                 <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)}>
+                   <option value="CDI">CDI</option>
+                   <option value="CDD">CDD</option>
++                  <option value="VDP">VDP (hors paie)</option>
++                  <option value="Stagiaire">Stagiaire (hors paie)</option>
+                 </select>
+               </div>
+               <div className="form-group"><label>Date d'embauche</label><input type="date" value={form.date_embauche} onChange={e => setF('date_embauche', e.target.value)} /></div>
+               <div className="form-group"><label>Date fin contrat (CDD)</label><input type="date" value={form.date_fin_contrat} onChange={e => setF('date_fin_contrat', e.target.value)} /></div>
+-              <div className="form-group"><label>Salaire brut mensuel (FCFA)</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
+               <div className="form-group">
+                 <label>Statut</label>
+                 <select value={form.statut} onChange={e => setF('statut', e.target.value)}>
+@@ -760,6 +786,15 @@ function importExcel(file) {
+                 </select>
+               </div>
+             </div>
++
++            <FormSection title="Rémunération mensuelle (FCFA)" />
++            <div className="form-grid">
++              <div className="form-group"><label>Salaire de base *</label><input type="number" value={form.salaire_brut} onChange={e => setF('salaire_brut', e.target.value)} placeholder="Ex: 150000" /></div>
++              <div className="form-group"><label>Sursalaire</label><input type="number" value={form.sursalaire} onChange={e => setF('sursalaire', e.target.value)} placeholder="0" /></div>
++              <div className="form-group"><label>Indem. logement</label><input type="number" value={form.indemnite_logement} onChange={e => setF('indemnite_logement', e.target.value)} placeholder="0" /></div>
++              <div className="form-group"><label>Indem. transport</label><input type="number" value={form.indemnite_transport} onChange={e => setF('indemnite_transport', e.target.value)} placeholder="0" /></div>
++              <div className="form-group"><label>Indem. de fonction</label><input type="number" value={form.indemnite_fonction} onChange={e => setF('indemnite_fonction', e.target.value)} placeholder="0" /></div>
++            </div>
+           </div>
+         )}
+       </div>
+-- 
+2.43.0
+
+
+From b70b637378a044c52e3a484526a483e14c6b15c9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 02:25:57 +0000
+Subject: [PATCH 02/13] =?UTF-8?q?Paie:=20auto-fill=20indemnit=C3=A9s=20fro?=
+ =?UTF-8?q?m=20agent=20fiche=20+=20grouped=20bulletin=20PDF?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- prefillFromAgent() now populates sursalaire, indemnite_logement,
+  indemnite_transport, indemnite_fonction from agent record when
+  selecting an agent in the bulletin creation form
+
+- Added drawBulletinOnDoc() helper (reuses same layout as
+  generateBulletinPDF but writes into an existing jsPDF instance)
+
+- Added generateBulletinsGroupesPDF(): selects active agents
+  (statut='Actif', type_contrat NOT IN VDP/Stagiaire,
+  date_embauche ≤ first day of selected month), computes payroll
+  from each agent's stored salary/indemnités, and produces a
+  single multi-page PDF (one page per agent)
+
+- Added "Générer tous les bulletins" button in the period header
+  with live progress indicator (current/total — agent name)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Paie.js | 281 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 280 insertions(+), 1 deletion(-)
+
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index 843d83e..f6c4b4f 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -261,6 +261,247 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
+   doc.save(`bulletin_${agent.prenom}_${agent.nom}_${MOIS[bulletin.mois - 1]}_${bulletin.annee}.pdf`);
+ }
+ 
++// ── Generate all bulletins in one multi-page PDF ──────────
++// One A4 page per agent; each page is a complete bulletin.
++// The function draws each bulletin onto the doc then adds a page break.
++function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
++  const today = new Date().toLocaleDateString('fr-FR');
++  const NOIR = [26, 26, 26];
++  const GRIS = [115, 115, 115];
++  const GRIS_CLAIR = [240, 240, 240];
++  let y = 14;
++
++  if (entreprise?.logo_url) {
++    try { doc.addImage(entreprise.logo_url, 'PNG', 14, y - 2, 18, 18); } catch (e) {}
++  } else {
++    doc.setDrawColor(200, 200, 200);
++    doc.setLineDashPattern([1, 1], 0);
++    doc.rect(14, y - 2, 18, 18);
++    doc.setLineDashPattern([], 0);
++    doc.setFontSize(6);
++    doc.setTextColor(...GRIS);
++    doc.text('LOGO', 23, y + 7, { align: 'center' });
++  }
++  const tx = 36;
++  doc.setTextColor(...NOIR);
++  doc.setFontSize(13);
++  doc.setFont('helvetica', 'bold');
++  doc.text(entreprise?.nom || 'Entreprise', tx, y + 3);
++  doc.setFontSize(8);
++  doc.setFont('helvetica', 'normal');
++  doc.setTextColor(...GRIS);
++  doc.text([
++    entreprise?.siege_social || '',
++    entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
++    entreprise?.cnss_employeur ? `CNSS: ${entreprise.cnss_employeur}` : '',
++  ].filter(Boolean).join('  |  '), tx, y + 9);
++  doc.setTextColor(...GRIS);
++  doc.setFontSize(8);
++  doc.text('Bulletin édité le', 196, y, { align: 'right' });
++  doc.setFont('helvetica', 'bold');
++  doc.setTextColor(...NOIR);
++  doc.text(today, 196, y + 5, { align: 'right' });
++  y += 22;
++  doc.setDrawColor(...NOIR);
++  doc.setLineWidth(0.6);
++  doc.line(14, y, 196, y);
++  y += 6;
++
++  doc.setFont('helvetica', 'bold');
++  doc.setFontSize(11);
++  doc.text(`BULLETIN DE PAIE — ${MOIS[mois - 1].toUpperCase()} ${annee}`, 105, y + 3, { align: 'center' });
++  y += 8;
++  doc.setLineWidth(0.6);
++  doc.line(14, y, 196, y);
++  y += 6;
++
++  doc.setFontSize(8.5);
++  doc.setFont('helvetica', 'bold');
++  doc.text('EMPLOYEUR', 17, y + 2);
++  doc.text('EMPLOYÉ(E)', 107, y + 2);
++  doc.setFont('helvetica', 'normal');
++  doc.setFontSize(9);
++  doc.text(entreprise?.nom || '—', 17, y + 8);
++  doc.text(`${agent.prenom} ${agent.nom}`, 107, y + 8);
++  doc.setFontSize(8);
++  doc.setTextColor(...GRIS);
++  doc.text(`Représenté par : ${entreprise?.representant || '—'}`, 17, y + 13);
++  doc.text(`${agent.poste || '—'}${agent.departement ? ' — ' + agent.departement : ''}`, 107, y + 13);
++  doc.text(`${entreprise?.qualite_representant || ''}`, 17, y + 18);
++  doc.text(`Matricule : ${agent.matricule || '—'} | CNSS : ${agent.cnss || '—'}`, 107, y + 18);
++  doc.setTextColor(...NOIR);
++  y += 24;
++  doc.setLineWidth(0.6);
++  doc.line(14, y, 196, y);
++  y += 2;
++
++  const band = (label) => {
++    doc.setFillColor(...NOIR);
++    doc.rect(14, y, 182, 6.5, 'F');
++    doc.setTextColor(255, 255, 255);
++    doc.setFont('helvetica', 'bold');
++    doc.setFontSize(8.5);
++    doc.text(label.toUpperCase(), 17, y + 4.5);
++    doc.setTextColor(...NOIR);
++    y += 8.5;
++  };
++  const row = (label, val, opts = {}) => {
++    doc.setDrawColor(220, 220, 220);
++    doc.setLineWidth(0.2);
++    doc.line(14, y + 5, 196, y + 5);
++    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
++    doc.setFontSize(9);
++    doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
++    doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
++    doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
++    doc.setTextColor(...NOIR);
++    y += 6.2;
++  };
++  const totalRow = (label, val, big = false) => {
++    const h = big ? 9 : 7.5;
++    doc.setFillColor(...GRIS_CLAIR);
++    doc.rect(14, y, 182, h, 'F');
++    doc.setDrawColor(...NOIR);
++    doc.setLineWidth(0.5);
++    doc.line(14, y, 196, y);
++    doc.line(14, y + h, 196, y + h);
++    doc.setFont('helvetica', 'bold');
++    doc.setFontSize(big ? 12 : 10);
++    doc.text(label, 17, y + (big ? 6.3 : 5.2));
++    doc.text(Math.round(val).toLocaleString('fr-FR') + ' FCFA', 193, y + (big ? 6.3 : 5.2), { align: 'right' });
++    y += h + 3;
++  };
++
++  band('Éléments de rémunération');
++  const earnings = [
++    { label: 'Salaire de base',        val: bulletin.salaire_base },
++    { label: 'Sursalaire',             val: bulletin.sursalaire },
++    { label: 'Indemnité de logement',  val: bulletin.indemnite_logement },
++    { label: 'Indemnité de transport', val: bulletin.indemnite_transport },
++    { label: 'Indemnité de fonction',  val: bulletin.indemnite_fonction },
++    { label: 'Prime d\'ancienneté',    val: bulletin.prime_anciennete },
++    { label: 'Autres primes',          val: bulletin.autres_primes },
++    { label: 'Heures supplémentaires', val: bulletin.heures_sup },
++  ];
++  earnings.filter(e => e.val > 0).forEach(e => row(e.label, e.val));
++  totalRow('SALAIRE BRUT', bulletin.salaire_brut);
++  y += 2;
++
++  band('Base imposable IUTS');
++  row('Salaire imposable (brut - contrôle CNSS)', bulletin.salaire_brut_imposable, { muted: true });
++  row('Exonération logement', -bulletin.exo_logement, { indent: true, muted: true });
++  row('Exonération transport', -bulletin.exo_transport, { indent: true, muted: true });
++  row('Exonération fonction', -bulletin.exo_fonction, { indent: true, muted: true });
++  row('Abattement forfaitaire (25%)', -bulletin.abattement_forfaitaire, { indent: true, muted: true });
++  totalRow('BASE IUTS', bulletin.base_iuts);
++  y += 2;
++
++  band('Retenues');
++  row('CNSS salarié (5.5%, plafond 44 000)', bulletin.cnss_salarial);
++  row('IUTS brut', bulletin.iuts_brut);
++  row(`Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, -bulletin.abattement_familial, { indent: true, muted: true });
++  row('Net IUTS', bulletin.iuts);
++  totalRow('TOTAL RETENUES', bulletin.total_retenues);
++  y += 2;
++
++  band('Net à payer');
++  if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
++  row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
++  if (bulletin.avance_salaire > 0)    row('Avance sur salaire', bulletin.avance_salaire);
++  totalRow('NET À PAYER', bulletin.salaire_net, true);
++
++  doc.setFontSize(8);
++  doc.setTextColor(...GRIS);
++  doc.setFont('helvetica', 'normal');
++  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 4);
++  doc.setTextColor(...NOIR);
++  y += 14;
++
++  if (y > 245) { doc.addPage(); y = 20; }
++  doc.setDrawColor(...NOIR);
++  doc.setLineWidth(0.5);
++  doc.line(14, y, 196, y);
++  y += 8;
++  doc.setFont('helvetica', 'bold');
++  doc.setFontSize(9);
++  doc.text(entreprise?.qualite_representant || 'L\'EMPLOYEUR', 40, y, { align: 'center' });
++  doc.text('L\'EMPLOYÉ(E)', 170, y, { align: 'center' });
++  doc.setFont('helvetica', 'normal');
++  doc.setFontSize(7.5);
++  doc.setTextColor(...GRIS);
++  doc.text(entreprise?.mention_signataire || 'Cachet et signature', 40, y + 5, { align: 'center' });
++  doc.text('Lu et approuvé', 170, y + 5, { align: 'center' });
++  doc.setTextColor(...NOIR);
++  y += 22;
++  doc.setDrawColor(...NOIR);
++  doc.line(14, y, 70, y);
++  doc.line(130, y, 195, y);
++  doc.setFontSize(8);
++  doc.text(entreprise?.representant || '', 42, y + 4, { align: 'center' });
++  doc.text(`${agent.prenom} ${agent.nom}`, 162, y + 4, { align: 'center' });
++  y += 12;
++  doc.setFontSize(7);
++  doc.setTextColor(...GRIS);
++  if (entreprise?.pied_de_page) {
++    doc.text(entreprise.pied_de_page, 105, y, { align: 'center' });
++    y += 5;
++  }
++  doc.text(`Bulletin généré le ${today} — Document confidentiel`, 105, y, { align: 'center' });
++}
++
++async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress) {
++  // Filter agents eligible for payroll: not VDP/Stagiaire, embauche ≤ first of month
++  const firstOfMonth = new Date(annee, mois - 1, 1);
++  const eligible = (agents || []).filter(a => {
++    if (a.type_contrat === 'VDP' || a.type_contrat === 'Stagiaire') return false;
++    if (a.statut !== 'Actif') return false;
++    if (!a.date_embauche) return false;
++    return new Date(a.date_embauche) <= firstOfMonth;
++  });
++
++  if (eligible.length === 0) return { count: 0 };
++
++  const doc = new jsPDF();
++
++  for (let i = 0; i < eligible.length; i++) {
++    const agent = eligible[i];
++    if (i > 0) doc.addPage();
++    onProgress && onProgress(i + 1, eligible.length, agent);
++
++    const calc = calculerBulletin({
++      salaire_base:         agent.salaire_brut || 0,
++      sursalaire:           agent.sursalaire || 0,
++      indemnite_logement:   agent.indemnite_logement || 0,
++      indemnite_transport:  agent.indemnite_transport || 0,
++      indemnite_fonction:   agent.indemnite_fonction || 0,
++      prime_anciennete:     0,
++      autres_primes:        0,
++      heures_sup:           0,
++      autres_retenues:      0,
++      avance_salaire:       0,
++      situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
++      nombre_enfants:         agent.nombre_enfants || 0,
++    });
++
++    const bulletin = {
++      mois, annee,
++      salaire_base:         agent.salaire_brut || 0,
++      sursalaire:           agent.sursalaire || 0,
++      indemnite_logement:   agent.indemnite_logement || 0,
++      indemnite_transport:  agent.indemnite_transport || 0,
++      indemnite_fonction:   agent.indemnite_fonction || 0,
++      prime_anciennete: 0, autres_primes: 0, heures_sup: 0,
++      autres_retenues: 0,  avance_salaire: 0,
++      ...calc,
++    };
++
++    drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee);
++  }
++
++  doc.save(`bulletins_${MOIS[mois - 1]}_${annee}.pdf`);
++  return { count: eligible.length };
++}
++
+ // ── Export bulletin to Excel ───────────────────────────────
+ function exportBulletinExcel(form, preview, agent, entreprise) {
+   const periode = `${MOIS[(form.mois || 1) - 1]} ${form.annee || ''}`;
+@@ -333,6 +574,8 @@ export default function Paie({ agents, entreprise, profil }) {
+   const [filterAnnee, setFilterAnnee] = useState(NOW.getFullYear());
+   const [saving, setSaving] = useState(false);
+   const [avancesAgent, setAvancesAgent] = useState([]);
++  const [generating, setGenerating] = useState(false);
++  const [generateProgress, setGenerateProgress] = useState(null);
+ 
+   const [form, setForm] = useState({
+     agent_id: '',
+@@ -371,6 +614,24 @@ export default function Paie({ agents, entreprise, profil }) {
+ 
+   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
+ 
++  // ── Generate all bulletins as one PDF ──
++  async function handleGenererTous() {
++    setGenerating(true);
++    setGenerateProgress({ current: 0, total: 0, nom: '' });
++    try {
++      const result = await generateBulletinsGroupesPDF(
++        filterMois, filterAnnee, agents, entreprise,
++        (current, total, agent) => setGenerateProgress({ current, total, nom: `${agent.prenom} ${agent.nom}` }),
++      );
++      if (result.count === 0) showToast('Aucun agent éligible pour cette période', 'warning');
++      else showToast(`${result.count} bulletin(s) généré(s) — PDF téléchargé`, 'success');
++    } catch (e) {
++      showToast('Erreur lors de la génération : ' + e.message, 'error');
++    }
++    setGenerating(false);
++    setGenerateProgress(null);
++  }
++
+   // ── Print the on-screen bulletin preview ──
+   function handlePrint() {
+     const printContent = document.getElementById('bulletin-printable');
+@@ -403,7 +664,11 @@ export default function Paie({ agents, entreprise, profil }) {
+   async function prefillFromAgent(agentId) {
+     const agent = agents.find(a => a.id === agentId);
+     if (!agent) return;
+-    setF('salaire_base', agent.salaire_brut || '');
++    setF('salaire_base',          agent.salaire_brut        || '');
++    setF('sursalaire',            agent.sursalaire          || 0);
++    setF('indemnite_logement',    agent.indemnite_logement  || 0);
++    setF('indemnite_transport',   agent.indemnite_transport || 0);
++    setF('indemnite_fonction',    agent.indemnite_fonction  || 0);
+     setF('agent_id', agentId);
+ 
+     // Fetch approved advances not yet deducted from any bulletin
+@@ -562,6 +827,20 @@ export default function Paie({ agents, entreprise, profil }) {
+           {years.map(y => <option key={y} value={y}>{y}</option>)}
+         </select>
+         <div style={{ flex: 1 }} />
++        <button
++          className="btn btn-secondary btn-sm"
++          onClick={handleGenererTous}
++          disabled={generating}
++          title="Générer un PDF avec tous les bulletins du mois"
++        >
++          <FileText size={14} />
++          {generating
++            ? generateProgress?.total > 0
++              ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
++              : 'Génération…'
++            : 'Générer tous les bulletins'
++          }
++        </button>
+         <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+           <Plus size={14} />
+           Nouveau bulletin
+-- 
+2.43.0
+
+
+From 005ddbb3acfa1ff13a4d016d9cc2c25681dad29f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 02:44:16 +0000
+Subject: [PATCH 03/13] =?UTF-8?q?fix(agents):=20am=C3=A9liorer=20la=20robu?=
+ =?UTF-8?q?stesse=20de=20l'import=20Excel?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Normalisation des clés : suppression des espaces multiples,
+  des parenthèses comme (JJ/MM/AAAA) et (FCFA), et de n°
+- La colonne 'Salaire de base' est maintenant reconnue sans
+  le suffixe (FCFA) après normalisation
+- Condition d'import : le poste n'est plus obligatoire,
+  seul le nom suffit pour insérer un agent
+- Filtre des lignes d'en-tête/bannière du template
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Agents.js | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index 811085e..a65106c 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -298,12 +298,16 @@ function importExcel(file) {
+       const r = {};
+       Object.keys(row).forEach(k => {
+         const normalized = k.trim().toLowerCase()
++          .replace(/\s+/g, ' ')          // collapse multiple spaces/newlines
+           .replace(/[éèêë]/g, 'e')
+           .replace(/[àâ]/g, 'a')
+-          .replace(/[î]/g, 'i')
+-          .replace(/[ô]/g, 'o')
+-          .replace(/[û]/g, 'u')
+-          .replace(/[ç]/g, 'c');
++          .replace(/[îï]/g, 'i')
++          .replace(/[ôö]/g, 'o')
++          .replace(/[ûü]/g, 'u')
++          .replace(/[ç]/g, 'c')
++          .replace(/\(.*?\)/g, '')       // strip parentheses like (JJ/MM/AAAA) or (FCFA)
++          .replace(/n°/g, 'n')
++          .trim();
+         r[normalized] = row[k];
+       });
+ 
+@@ -327,9 +331,9 @@ function importExcel(file) {
+         departement:      r['departement'] || r['service'] || null,
+         categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
+         type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
+-        date_embauche:    excelDateToISO(r['date embauche'] || r['embauche']),
++        date_embauche:    excelDateToISO(r['date embauche'] || r['embauche'] || r['date d\'embauche']),
+         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
+-        salaire_brut:     parseNum(r['salaire de base (fcfa)'] || r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
++        salaire_brut:     parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
+         sursalaire:       parseNum(r['sursalaire']),
+         indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
+         indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
+@@ -342,7 +346,10 @@ function importExcel(file) {
+         if (agent[k] === '' || agent[k] === 'undefined') agent[k] = null;
+       });
+ 
+-      if (agent.nom && agent.poste) {
++      // Skip header/banner rows
++      const nomStr = (agent.nom || '').toUpperCase();
++      const isHeader = !agent.nom || nomStr.includes('TEMPLATE') || nomStr.includes('IDENTITE') || nomStr.includes('NOM');
++      if (agent.nom && !isHeader) {
+         const { error } = await supabase.from('agents').insert(agent);
+         if (!error) ok++;
+         else {
+@@ -350,7 +357,7 @@ function importExcel(file) {
+           console.error('Erreur insertion:', error.message, agent);
+         }
+       } else {
+-        console.warn('Ligne ignorée (nom ou poste manquant):', row);
++        console.warn('Ligne ignorée (nom manquant):', row);
+       }
+     }
+ 
+-- 
+2.43.0
+
+
+From 49f8925586c263410160f3c715171de8989db6a8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 02:56:10 +0000
+Subject: [PATCH 04/13] fix(import): fix Excel import with range:2 and newline
+ normalization in column keys
+
+- Use range:2 to skip banner row and group header row; real column
+  headers are on row 3 of the template
+- Normalize \n and \r in column names (e.g. "Date embauche\n(JJ/MM/AAAA)")
+  so they map correctly to DB fields
+- Strip parenthetical hints like (JJ/MM/AAAA) and (FCFA) from column keys
+- Relax row filter: accept any row where nom is non-empty and not a
+  header keyword (was previously requiring poste to be set)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Agents.js | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index a65106c..02d5335 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -285,7 +285,8 @@ function importExcel(file) {
+   reader.onload = async e => {
+     const wb   = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+     const ws   = wb.Sheets[wb.SheetNames[0]];
+-    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
++    // Skip rows 1-2 (banner + group headers); real headers are on row 3
++    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false, range: 2 });
+ 
+     console.log('Colonnes détectées:', data.length > 0 ? Object.keys(data[0]) : 'Aucune');
+     console.log('Première ligne:', data[0]);
+@@ -298,7 +299,8 @@ function importExcel(file) {
+       const r = {};
+       Object.keys(row).forEach(k => {
+         const normalized = k.trim().toLowerCase()
+-          .replace(/\s+/g, ' ')          // collapse multiple spaces/newlines
++          .replace(/[\n\r]+/g, ' ')      // newlines → space (e.g. "Date embauche\n(JJ/MM/AAAA)")
++          .replace(/\s+/g, ' ')          // collapse multiple spaces
+           .replace(/[éèêë]/g, 'e')
+           .replace(/[àâ]/g, 'a')
+           .replace(/[îï]/g, 'i')
+-- 
+2.43.0
+
+
+From c3898af61247317355de01e1991a82e1526216df Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 03:16:38 +0000
+Subject: [PATCH 05/13] fix(import): use header:1 + manual mapping to handle
+ merged cells in Excel
+
+Replace sheet_to_json with range option by reading raw arrays (header:1),
+extracting row 3 as headers and rows 4+ as data, then building objects
+manually. This avoids __EMPTY keys caused by merged cells in column A.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Agents.js | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index 02d5335..3059b59 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -285,10 +285,21 @@ function importExcel(file) {
+   reader.onload = async e => {
+     const wb   = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+     const ws   = wb.Sheets[wb.SheetNames[0]];
+-    // Skip rows 1-2 (banner + group headers); real headers are on row 3
+-    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false, range: 2 });
++    // Read as raw arrays to handle merged cells (row 3 = headers, row 4+ = data)
++    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
++    const headers = rows[2] || []; // row index 2 = Excel row 3
++    const dataRows = rows.slice(3);  // row index 3+ = data
++
++    // Build objects from headers + rows manually
++    const data = dataRows.map(row => {
++      const obj = {};
++      headers.forEach((h, i) => {
++        obj[h || `__EMPTY_${i}`] = row[i] ?? '';
++      });
++      return obj;
++    }).filter(r => Object.values(r).some(v => v !== ''));
+ 
+-    console.log('Colonnes détectées:', data.length > 0 ? Object.keys(data[0]) : 'Aucune');
++    console.log('Colonnes détectées:', headers);
+     console.log('Première ligne:', data[0]);
+ 
+     let ok = 0;
+-- 
+2.43.0
+
+
+From c98e3437ae38879b9c43f85281d765b3bd9b0116 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 03:36:50 +0000
+Subject: [PATCH 06/13] feat(agents): add multi-select checkboxes and bulk
+ delete
+
+- Checkbox column in table header (select all / indeterminate state)
+- Per-row checkbox with orange highlight on selected rows
+- "Supprimer (N)" danger button appears in toolbar when selection > 0
+- Selected count badge shown in card header
+- handleDeleteSelected: batch delete via supabase .in('id', ids)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/pages/Agents.js | 75 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 73 insertions(+), 2 deletions(-)
+
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index 3059b59..e0d1c1d 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -92,6 +92,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+   const [loading, setLoading] = useState(false);
+   const [docModal, setDocModal] = useState(null);
+   const [step, setStep] = useState(1);
++  const [selected, setSelected] = useState(new Set());
++  const [deleting, setDeleting] = useState(false);
+ 
+   // ── Unique filter options ──
+   const postes = [...new Set(agents.map(a => a.poste))].sort();
+@@ -180,6 +182,36 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+     onRefresh();
+   }
+ 
++  // ── Delete selected agents ──
++  async function handleDeleteSelected() {
++    if (selected.size === 0) return;
++    if (!window.confirm(`Supprimer ${selected.size} agent(s) ? Cette action est irréversible.`)) return;
++    setDeleting(true);
++    const ids = [...selected];
++    const { error } = await supabase.from('agents').delete().in('id', ids);
++    if (error) showToast('Erreur lors de la suppression', 'error');
++    else { showToast(`${ids.length} agent(s) supprimé(s)`); setSelected(new Set()); onRefresh(); }
++    setDeleting(false);
++  }
++
++  // ── Toggle select all (filtered agents) ──
++  function toggleSelectAll() {
++    if (selected.size === filtered.length && filtered.length > 0) {
++      setSelected(new Set());
++    } else {
++      setSelected(new Set(filtered.map(a => a.id)));
++    }
++  }
++
++  // ── Toggle single agent ──
++  function toggleSelect(id) {
++    setSelected(prev => {
++      const next = new Set(prev);
++      if (next.has(id)) next.delete(id); else next.add(id);
++      return next;
++    });
++  }
++
+   // ── Generate document ──
+   async function generateDoc(type, a) {
+     if (!entreprise || !entreprise.nom) {
+@@ -447,6 +479,18 @@ function importExcel(file) {
+           />
+         </label>
+ 
++        {/* Delete selected */}
++        {peutFaire(profil, 'supprimerAgents') && selected.size > 0 && (
++          <button
++            className="btn btn-danger btn-sm"
++            onClick={handleDeleteSelected}
++            disabled={deleting}
++          >
++            <Trash2 size={14} />
++            {deleting ? 'Suppression...' : `Supprimer (${selected.size})`}
++          </button>
++        )}
++
+         {/* Add agent */}
+         {peutFaire(profil, 'modifierAgents') && (
+           <button className="btn btn-primary btn-sm" onClick={openAdd}>
+@@ -526,12 +570,30 @@ function importExcel(file) {
+                 sur {agents.length} au total
+               </span>
+             )}
++            {selected.size > 0 && (
++              <span style={{
++                fontSize: 12, color: '#E8920A', fontWeight: 600, marginLeft: 10,
++                background: '#FFF3E0', padding: '2px 8px', borderRadius: 6,
++              }}>
++                {selected.size} sélectionné(s)
++              </span>
++            )}
+           </h3>
+         </div>
+         <div style={{ overflowX: 'auto' }}>
+           <table>
+             <thead>
+               <tr>
++                <th style={{ width: 36 }}>
++                  <input
++                    type="checkbox"
++                    checked={filtered.length > 0 && selected.size === filtered.length}
++                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
++                    onChange={toggleSelectAll}
++                    style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
++                    title="Tout sélectionner"
++                  />
++                </th>
+                 <th>Agent</th>
+                 <th>Poste</th>
+                 <th>Département</th>
+@@ -546,7 +608,7 @@ function importExcel(file) {
+             <tbody>
+               {filtered.length === 0 ? (
+                 <tr>
+-                  <td colSpan="9" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
++                  <td colSpan="10" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                     Aucun agent trouvé
+                   </td>
+                 </tr>
+@@ -554,8 +616,17 @@ function importExcel(file) {
+                 const c = avatarColor(a.nom);
+                 const jours = joursRestants(a.date_fin_contrat);
+                 const isExpiring = a.type_contrat === 'CDD' && jours !== null && jours <= 30 && jours >= 0;
++                const isSelected = selected.has(a.id);
+                 return (
+-                  <tr key={a.id}>
++                  <tr key={a.id} style={{ background: isSelected ? '#FFF8F0' : undefined }}>
++                    <td style={{ width: 36 }}>
++                      <input
++                        type="checkbox"
++                        checked={isSelected}
++                        onChange={() => toggleSelect(a.id)}
++                        style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
++                      />
++                    </td>
+                     <td>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                         <div className="avatar" style={{ background: c.bg, color: c.fg }}>
+-- 
+2.43.0
+
+
+From 99f3eda9551f05a6600006bab746996b3129e049 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 13:48:25 +0000
+Subject: [PATCH 07/13] =?UTF-8?q?Fix=20import=20Excel=20:=20normalisation?=
+ =?UTF-8?q?=20type=5Fcontrat,=20VDP/Stagiaire=20hors=20paie,=20correction?=
+ =?UTF-8?q?=20cl=C3=A9s=20indemnit=C3=A9s?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- STAGIAIRE → Stagiaire, VDP reste VDP (casse cohérente avec le reste de l'app)
+- Agents VDP/Stagiaire : salaire_brut et indemnités à null/0 (hors paie)
+- Clé normalisée 'categorie sociopro' (sans point) pour correspondre au template
+- Clés indemnités : 'indem logement/transport/fonction' (après strip des parenthèses)
+- Badges VDP (violet) et Stagiaire (teal) dans la liste agents
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/index.css       |  2 ++
+ src/pages/Agents.js | 36 ++++++++++++++++++++++++++----------
+ 2 files changed, 28 insertions(+), 10 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index 4fcc0ce..010717b 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -274,6 +274,8 @@ tbody tr:last-child td { border-bottom: none; }
+ .badge-orange { background: var(--accent-light);  color: var(--accent); }
+ .badge-red    { background: var(--danger-light);  color: var(--danger); }
+ .badge-gray   { background: var(--gray-100);      color: var(--gray-500); }
++.badge-purple { background: #EDE9FE;              color: #7C3AED; }
++.badge-teal   { background: #CCFBF1;              color: #0F766E; }
+ 
+ /* ── Forms ── */
+ .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index e0d1c1d..2dccf38 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -358,6 +358,19 @@ function importExcel(file) {
+ 
+       // Map to agent fields
+       const parseNum = v => v ? parseFloat(String(v).replace(/\s/g, '').replace(',', '.')) || 0 : 0;
++
++      // Normalize type_contrat: handle STAGIAIRE → Stagiaire, uppercase variants
++      const rawType = (r['type contrat'] || r['contrat'] || 'CDI').toString().trim();
++      const normalizeType = t => {
++        const u = t.toUpperCase();
++        if (u === 'STAGIAIRE') return 'Stagiaire';
++        if (u === 'VDP') return 'VDP';
++        if (u === 'CDD') return 'CDD';
++        return 'CDI';
++      };
++      const typeContrat = normalizeType(rawType);
++      const isHorsPayroll = typeContrat === 'VDP' || typeContrat === 'Stagiaire';
++
+       const agent = {
+         nom:       (r['nom'] || r['name'] || '').toString().trim(),
+         prenom:    (r['prenom'] || r['prenoms'] || r['first name'] || '').toString().trim(),
+@@ -370,19 +383,20 @@ function importExcel(file) {
+         email:            r['email'] || r['mail'] || null,
+         adresse:          r['adresse'] || r['address'] || null,
+         nin:              r['nin'] || null,
+-        cnib:             r['n cnib'] || r['cnib'] || r['n° cnib'] || r['numero cnib'] || null,
++        cnib:             r['n cnib'] || r['cnib'] || r['numero cnib'] || null,
+         cnss:             r['cnss'] || null,
+         poste:            (r['poste'] || r['fonction'] || r['job'] || '').toString().trim(),
+         departement:      r['departement'] || r['service'] || null,
+-        categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
+-        type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
++        categorie_socioprofessionnelle: r['categorie sociopro'] || r['categorie'] || r['cat'] || null,
++        type_contrat:     typeContrat,
+         date_embauche:    excelDateToISO(r['date embauche'] || r['embauche'] || r['date d\'embauche']),
+         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
+-        salaire_brut:     parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
+-        sursalaire:       parseNum(r['sursalaire']),
+-        indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
+-        indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
+-        indemnite_fonction:  parseNum(r['indem. fonction'] || r['indemnite fonction'] || r['indem fonction']),
++        // VDP/Stagiaire : salaire et indemnités à 0, pas de cotisations
++        salaire_brut:     isHorsPayroll ? null : (parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null),
++        sursalaire:       isHorsPayroll ? 0 : parseNum(r['sursalaire']),
++        indemnite_logement:  isHorsPayroll ? 0 : parseNum(r['indem logement'] || r['indemnite logement']),
++        indemnite_transport: isHorsPayroll ? 0 : parseNum(r['indem transport'] || r['indemnite transport']),
++        indemnite_fonction:  isHorsPayroll ? 0 : parseNum(r['indem fonction'] || r['indemnite fonction']),
+         statut:           r['statut'] || 'Actif',
+       };
+ 
+@@ -648,8 +662,10 @@ function importExcel(file) {
+                     <td>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                         <span className={`badge ${
+-                          a.type_contrat === 'CDI' ? 'badge-blue' :
+-                          a.type_contrat === 'CDD' ? 'badge-orange' :
++                          a.type_contrat === 'CDI'       ? 'badge-blue' :
++                          a.type_contrat === 'CDD'       ? 'badge-orange' :
++                          a.type_contrat === 'VDP'       ? 'badge-purple' :
++                          a.type_contrat === 'Stagiaire' ? 'badge-teal' :
+                           'badge-gray'
+                         }`}>
+                           {a.type_contrat}
+-- 
+2.43.0
+
+
+From d09ef8f6099ee340d1ee2927403d2dc1a3b48dfb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 13:56:39 +0000
+Subject: [PATCH 08/13] =?UTF-8?q?feat(paie):=20G=C3=A9n=C3=A9rer=20et=20en?=
+ =?UTF-8?q?registrer=20tous=20les=20bulletins=20en=20un=20clic?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Nouveau bouton "Générer et enregistrer tous" qui pour chaque agent éligible :
+  1. Récupère les avances approuvées en attente et les déduit automatiquement
+  2. Calcule le bulletin complet (CNSS/IUTS)
+  3. Upsert dans bulletins_paie (agent_id, mois, annee)
+  4. Lie les avances au bulletin sauvegardé (deduite_bulletin_id)
+  5. Dessine la page PDF correspondante
+- Génère et télécharge le PDF groupé après tous les enregistrements
+- Ancien bouton renommé "PDF seulement" (sans enregistrement)
+- Ajout classe CSS btn-success (vert)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/index.css     |   2 +
+ src/pages/Paie.js | 123 +++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 123 insertions(+), 2 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index 010717b..66db277 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -178,6 +178,8 @@ body {
+ }
+ .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+ 
++.btn-success { background: #16A34A; color: var(--white); border: 1px solid #16A34A; }
++.btn-success:hover { background: #15803d; transform: translateY(-1px); }
+ .btn-danger { background: var(--danger); color: var(--white); }
+ .btn-danger:hover { background: #b91c1c; }
+ 
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index f6c4b4f..b1a19fa 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -632,6 +632,111 @@ export default function Paie({ agents, entreprise, profil }) {
+     setGenerateProgress(null);
+   }
+ 
++  // ── Generate + save all bulletins to DB, then PDF ──
++  async function handleGenererEtSauvegarder() {
++    if (!window.confirm(`Générer et enregistrer tous les bulletins pour ${MOIS[filterMois - 1]} ${filterAnnee} ?\nLes bulletins existants seront mis à jour.`)) return;
++    setGenerating(true);
++    setGenerateProgress({ current: 0, total: 0, nom: '' });
++    try {
++      const firstOfMonth = new Date(filterAnnee, filterMois - 1, 1);
++      const eligible = (agents || []).filter(a => {
++        if (a.type_contrat === 'VDP' || a.type_contrat === 'Stagiaire') return false;
++        if (a.statut !== 'Actif') return false;
++        if (!a.date_embauche) return false;
++        return new Date(a.date_embauche) <= firstOfMonth;
++      });
++
++      if (eligible.length === 0) {
++        showToast('Aucun agent éligible pour cette période', 'warning');
++        setGenerating(false);
++        setGenerateProgress(null);
++        return;
++      }
++
++      let savedCount = 0;
++      const doc = new jsPDF();
++
++      for (let i = 0; i < eligible.length; i++) {
++        const agent = eligible[i];
++        setGenerateProgress({ current: i + 1, total: eligible.length, nom: `${agent.prenom} ${agent.nom}` });
++
++        // Fetch pending approved advances for this agent
++        const { data: avancesData } = await supabase
++          .from('avances')
++          .select('*')
++          .eq('agent_id', agent.id)
++          .eq('statut', 'Approuvé')
++          .is('deduite_bulletin_id', null);
++        const avances = avancesData || [];
++        const totalAvances = avances.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0);
++
++        const calc = calculerBulletin({
++          salaire_base:           agent.salaire_brut || 0,
++          sursalaire:             agent.sursalaire || 0,
++          indemnite_logement:     agent.indemnite_logement || 0,
++          indemnite_transport:    agent.indemnite_transport || 0,
++          indemnite_fonction:     agent.indemnite_fonction || 0,
++          prime_anciennete:       0,
++          autres_primes:          0,
++          heures_sup:             0,
++          autres_retenues:        0,
++          avance_salaire:         totalAvances,
++          situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
++          nombre_enfants:         agent.nombre_enfants || 0,
++        });
++
++        const bulletinData = {
++          agent_id:             agent.id,
++          mois:                 filterMois,
++          annee:                filterAnnee,
++          salaire_base:         agent.salaire_brut || 0,
++          sursalaire:           agent.sursalaire || 0,
++          indemnite_logement:   agent.indemnite_logement || 0,
++          indemnite_transport:  agent.indemnite_transport || 0,
++          indemnite_fonction:   agent.indemnite_fonction || 0,
++          prime_anciennete:     0,
++          autres_primes:        0,
++          heures_sup:           0,
++          autres_retenues:      0,
++          avance_salaire:       totalAvances,
++          statut:               'Brouillon',
++          created_by:           profil?.id,
++          ...calc,
++        };
++
++        const { data: savedBulletin, error } = await supabase
++          .from('bulletins_paie')
++          .upsert(bulletinData, { onConflict: 'agent_id,mois,annee' })
++          .select()
++          .single();
++
++        if (!error) {
++          savedCount++;
++          // Link advances to this bulletin
++          if (avances.length > 0 && savedBulletin?.id) {
++            await supabase
++              .from('avances')
++              .update({ deduite_bulletin_id: savedBulletin.id })
++              .in('id', avances.map(a => a.id));
++          }
++        }
++
++        // Draw on PDF
++        if (i > 0) doc.addPage();
++        const bulletinForPDF = { mois: filterMois, annee: filterAnnee, ...bulletinData, ...calc };
++        drawBulletinOnDoc(doc, bulletinForPDF, agent, entreprise, filterMois, filterAnnee);
++      }
++
++      doc.save(`bulletins_${MOIS[filterMois - 1]}_${filterAnnee}.pdf`);
++      showToast(`${savedCount}/${eligible.length} bulletins enregistrés et PDF téléchargé`, 'success');
++      loadBulletins();
++    } catch (e) {
++      showToast('Erreur : ' + e.message, 'error');
++    }
++    setGenerating(false);
++    setGenerateProgress(null);
++  }
++
+   // ── Print the on-screen bulletin preview ──
+   function handlePrint() {
+     const printContent = document.getElementById('bulletin-printable');
+@@ -831,14 +936,28 @@ export default function Paie({ agents, entreprise, profil }) {
+           className="btn btn-secondary btn-sm"
+           onClick={handleGenererTous}
+           disabled={generating}
+-          title="Générer un PDF avec tous les bulletins du mois"
++          title="Générer un PDF avec tous les bulletins du mois (sans enregistrement)"
+         >
+           <FileText size={14} />
+           {generating
+             ? generateProgress?.total > 0
+               ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
+               : 'Génération…'
+-            : 'Générer tous les bulletins'
++            : 'PDF seulement'
++          }
++        </button>
++        <button
++          className="btn btn-success btn-sm"
++          onClick={handleGenererEtSauvegarder}
++          disabled={generating}
++          title="Calculer, enregistrer dans la base et télécharger le PDF pour tous les agents éligibles"
++        >
++          <Save size={14} />
++          {generating
++            ? generateProgress?.total > 0
++              ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
++              : 'Enregistrement…'
++            : 'Générer et enregistrer tous'
+           }
+         </button>
+         <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+-- 
+2.43.0
+
+
+From 50cf16371e042eaee128764e7dfd491e25ffd045 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 15:42:25 +0000
+Subject: [PATCH 09/13] fix(paie): supprimer la retenue 1% (effort de guerre)
+ du calcul
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- calcPaie.js : retenue_effort_guerre supprimée du calcul, toujours 0
+  Salaire net = salaire net avant déduction - avance (conforme aux bulletins Excel)
+- Paie.js : ligne "Retenue 1%" retirée du PDF et de l'export Excel individuel
+- BulletinPreview.js : ligne retirée de l'aperçu à l'écran
+- EtatSalaires.js : colonne "Retenue 1%" retirée du PDF et Excel récapitulatif
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js |  3 +--
+ src/lib/calcPaie.js               | 15 ++++-----------
+ src/pages/EtatSalaires.js         | 14 +++++---------
+ src/pages/Paie.js                 |  7 ++-----
+ 4 files changed, 12 insertions(+), 27 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index f588086..b2881f0 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -248,11 +248,10 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+           <TotalRow label="TOTAL RETENUES" value={preview?.total_retenues} />
+ 
+           {/* Other deductions */}
+-          {preview && (parseFloat(form.autres_retenues) > 0 || preview.retenue_effort_guerre > 0 || parseFloat(form.avance_salaire) > 0) && (
++          {preview && (parseFloat(form.autres_retenues) > 0 || parseFloat(form.avance_salaire) > 0) && (
+             <>
+               <Band label="Autres déductions" />
+               {parseFloat(form.autres_retenues) > 0 && <Row label="Autres retenues" value={form.autres_retenues} />}
+-              <Row label="Retenue 1% (effort de guerre)" value={preview.retenue_effort_guerre} />
+               {parseFloat(form.avance_salaire) > 0 && <Row label="Avance sur salaire" value={form.avance_salaire} />}
+             </>
+           )}
+diff --git a/src/lib/calcPaie.js b/src/lib/calcPaie.js
+index 710f550..f1cfb6d 100644
+--- a/src/lib/calcPaie.js
++++ b/src/lib/calcPaie.js
+@@ -13,8 +13,7 @@
+ // 9. Abattement charges familiales = % selon nombre de personnes à charge (max 7)
+ // 10. Net IUTS = IUTS brut - abattement familial
+ // 11. Salaire net avant déduction = brut - CNSS - Net IUTS - autres retenues
+-// 12. Retenue 1% (effort de guerre) sur le salaire net avant déduction
+-// 13. Salaire net = net avant déduction - retenue 1% - avance sur salaire
++// 12. Salaire net = net avant déduction - avance sur salaire (pas de retenue 1%)
+ 
+ // ── CNSS constants ────────────────────────────────────────
+ const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
+@@ -33,8 +32,6 @@ const EXO_FONCTION_PLAFOND = 50000;
+ // ── Flat-rate allowance (abattement forfaitaire) ──────────
+ const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
+ 
+-// ── War effort withholding (retenue 1%) ───────────────────
+-const RETENUE_EFFORT_GUERRE = 0.01;
+ 
+ // ── IUTS progressive brackets (monthly taxable base) ──────
+ // Replicated exactly from the AZARIA sheet (F3:G11)
+@@ -195,13 +192,9 @@ export function calculerBulletin(data) {
+     salaire_brut - cnss_salarial - iuts - sAutresRetenues
+   );
+ 
+-  // ── Step 12: Retenue 1% effort de guerre (D42) ──
+-  const retenue_effort_guerre = Math.round(salaire_net_avant_deduction * RETENUE_EFFORT_GUERRE);
+-
+-  // ── Step 13: Salaire net final (D44) ──
+-  const salaire_net = Math.round(
+-    salaire_net_avant_deduction - retenue_effort_guerre - sAvance
+-  );
++  // ── Step 12: Salaire net final = net avant déduction - avance (pas de retenue 1%) ──
++  const retenue_effort_guerre = 0; // supprimé — non applicable
++  const salaire_net = Math.round(salaire_net_avant_deduction - sAvance);
+ 
+   // ── Employer contribution ──
+   const cnss_patronal = calculerCNSSPatronal(salaire_brut);
+diff --git a/src/pages/EtatSalaires.js b/src/pages/EtatSalaires.js
+index a1e43ab..4e75426 100644
+--- a/src/pages/EtatSalaires.js
++++ b/src/pages/EtatSalaires.js
+@@ -55,7 +55,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
+   const head = [[
+     'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
+     'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
+-    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
++    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
+   ]];
+ 
+   const body = bulletins.map((b, i) => [
+@@ -71,7 +71,6 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
+   formatNombrePDF(b.cnss_salarial),
+   formatNombrePDF(b.iuts),
+   formatNombrePDF(b.salaire_net_avant_deduction),
+-  formatNombrePDF(b.retenue_effort_guerre),
+   formatNombrePDF(b.salaire_net),
+ ]);
+ 
+@@ -88,7 +87,6 @@ const totalRow = [
+   formatNombrePDF(sum('cnss_salarial')),
+   formatNombrePDF(sum('iuts')),
+   formatNombrePDF(sum('salaire_net_avant_deduction')),
+-  formatNombrePDF(sum('retenue_effort_guerre')),
+   formatNombrePDF(sum('salaire_net')),
+ ];
+ 
+@@ -112,8 +110,7 @@ const totalRow = [
+     9: { halign: 'right' },
+     10: { halign: 'right' },
+     11: { halign: 'right' },
+-    12: { halign: 'right' },
+-    13: { halign: 'right', fontStyle: 'bold' },
++    12: { halign: 'right', fontStyle: 'bold' },
+   },
+   didParseCell: (data) => {
+     if (data.row.index === body.length) {
+@@ -155,7 +152,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+     [
+       'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
+       'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
+-      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
++      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
+     ],
+   ];
+ 
+@@ -173,7 +170,6 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+       b.cnss_salarial || 0,
+       b.iuts || 0,
+       b.salaire_net_avant_deduction || 0,
+-      b.retenue_effort_guerre || 0,
+       b.salaire_net || 0,
+     ]);
+   });
+@@ -184,7 +180,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+     sum('salaire_base'), sum('indemnite_fonction'), sum('heures_sup'),
+     sum('indemnite_logement'), sum('indemnite_transport'), sum('salaire_brut'),
+     sum('cnss_salarial'), sum('iuts'), sum('salaire_net_avant_deduction'),
+-    sum('retenue_effort_guerre'), sum('salaire_net'),
++    sum('salaire_net'),
+   ]);
+ 
+   rows.push([]);
+@@ -194,7 +190,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+   ws['!cols'] = [
+     { wch: 5 }, { wch: 28 }, { wch: 18 }, { wch: 14 },
+     { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+-    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
++    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+   ];
+   const wb = XLSX.utils.book_new();
+   XLSX.utils.book_append_sheet(wb, ws, 'Etat des salaires');
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index b1a19fa..b176bfd 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -203,11 +203,10 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
+   totalRow('TOTAL RETENUES (CNSS + IUTS)', bulletin.total_retenues);
+ 
+   // ── Other deductions ──
+-  if (bulletin.autres_retenues > 0 || bulletin.retenue_effort_guerre > 0 || bulletin.avance_salaire > 0) {
++  if (bulletin.autres_retenues > 0 || bulletin.avance_salaire > 0) {
+     if (y > 225) { doc.addPage(); y = 20; }
+     band('Autres déductions');
+     if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+-    if (bulletin.retenue_effort_guerre > 0) row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+     if (bulletin.avance_salaire > 0) row('Avance sur salaire', bulletin.avance_salaire);
+     y += 2;
+   }
+@@ -406,8 +405,7 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+ 
+   band('Net à payer');
+   if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+-  row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+-  if (bulletin.avance_salaire > 0)    row('Avance sur salaire', bulletin.avance_salaire);
++  if (bulletin.avance_salaire > 0)  row('Avance sur salaire', bulletin.avance_salaire);
+   totalRow('NET À PAYER', bulletin.salaire_net, true);
+ 
+   doc.setFontSize(8);
+@@ -548,7 +546,6 @@ function exportBulletinExcel(form, preview, agent, entreprise) {
+     ['TOTAL RETENUES', preview?.total_retenues || 0],
+     [],
+     ['Autres retenues', parseFloat(form.autres_retenues) || 0],
+-    ['Retenue 1% (effort de guerre)', preview?.retenue_effort_guerre || 0],
+     ['Avance sur salaire', parseFloat(form.avance_salaire) || 0],
+     [],
+     ['NET À PAYER', preview?.salaire_net || 0],
+-- 
+2.43.0
+
+
+From e9d64e073547b4277ebca869a56716300b736b9f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 15:52:42 +0000
+Subject: [PATCH 10/13] =?UTF-8?q?feat:=20reformater=20bulletins=20selon=20?=
+ =?UTF-8?q?mod=C3=A8le=20Excel=20FASO=20ARMORED?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- BulletinPreview.js : layout tableau identique au modèle Excel
+  (titre rose, 3 colonnes employeur/CNSS/employé, lignes indemnités,
+  contrôle des indemnités avec plafond et retenu, Net IUTS, salaire net)
+- drawBulletinOnDoc (PDF) : même structure que le nouveau preview
+  (grille 3 colonnes, italic pour lignes fiscales, gras pour totaux,
+  fond vert clair sur logement/fonction comme Excel)
+- Retenues groupées en "Autres retenues" (avances + autres)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js | 590 +++++++++++++++++-------------
+ src/pages/Paie.js                 | 472 +++++++++++++++---------
+ 2 files changed, 625 insertions(+), 437 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index b2881f0..4f7147c 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -1,5 +1,5 @@
+-// BulletinPreview.js - Visual A4 payroll bulletin preview
+-// Clean black & white table layout, print-friendly
++// BulletinPreview.js - Bulletin de paie format Excel FASO ARMORED
++// Layout identique au modèle Excel fourni
+ 
+ import React from 'react';
+ import { formatFCFA } from '../lib/calcPaie';
+@@ -9,88 +9,43 @@ const MOIS = [
+   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+ ];
+ 
+-// ── Table row ────────────────────────────────────────────
+-function Row({ label, value, bold, muted, indent }) {
+-  return (
+-    <tr>
+-      <td style={{
+-        padding: '5px 12px',
+-        paddingLeft: indent ? 28 : 12,
+-        fontSize: 11.5,
+-        color: '#1A1A1A',
+-        fontWeight: bold ? 700 : 400,
+-        borderBottom: '1px solid #DDDDDD',
+-        opacity: muted ? 0.65 : 1,
+-      }}>
+-        {label}
+-      </td>
+-      <td style={{
+-        padding: '5px 12px',
+-        fontSize: 11.5,
+-        color: '#1A1A1A',
+-        fontWeight: bold ? 700 : 500,
+-        textAlign: 'right',
+-        borderBottom: '1px solid #DDDDDD',
+-        opacity: muted ? 0.65 : 1,
+-        whiteSpace: 'nowrap',
+-      }}>
+-        {formatFCFA(value)}
+-      </td>
+-    </tr>
+-  );
+-}
++// ── Styles de base ────────────────────────────────────────
++const BASE = {
++  fontFamily: "'Arial', sans-serif",
++  fontSize: 11,
++  color: '#1A1A1A',
++};
+ 
+-// ── Section band header ─────────────────────────────────
+-function Band({ label }) {
+-  return (
+-    <tr>
+-      <td colSpan={2} style={{
+-        padding: '6px 12px',
+-        background: '#1A1A1A',
+-        fontSize: 10.5, fontWeight: 700, color: '#fff',
+-        textTransform: 'uppercase', letterSpacing: '0.5px',
+-      }}>
+-        {label}
+-      </td>
+-    </tr>
+-  );
++const CELL = {
++  border: '1px solid #999',
++  padding: '3px 6px',
++  fontSize: 11,
++  verticalAlign: 'middle',
++};
++
++const CELL_BOLD = { ...CELL, fontWeight: 700 };
++const CELL_ITALIC = { ...CELL, fontStyle: 'italic' };
++const CELL_RIGHT = { ...CELL, textAlign: 'right' };
++const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
++const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
++
++// Cellule sans bordure gauche/droite pour les lignes de regroupement
++const CELL_INNER = { ...CELL, borderLeft: 'none', borderRight: 'none' };
++
++function fmt(v) {
++  if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
++  const n = parseFloat(v);
++  if (isNaN(n) || n === 0) return '';
++  return Math.round(n).toLocaleString('fr-FR');
+ }
+ 
+-// ── Total row ────────────────────────────────────────────
+-function TotalRow({ label, value, big }) {
+-  return (
+-    <tr>
+-      <td style={{
+-        padding: big ? '10px 12px' : '8px 12px',
+-        background: '#F0F0F0',
+-        fontSize: big ? 14 : 12.5,
+-        fontWeight: 800, color: '#0F0F0F',
+-        borderTop: '2px solid #1A1A1A',
+-        borderBottom: '2px solid #1A1A1A',
+-      }}>
+-        {label}
+-      </td>
+-      <td style={{
+-        padding: big ? '10px 12px' : '8px 12px',
+-        background: '#F0F0F0',
+-        fontSize: big ? 14 : 12.5,
+-        fontWeight: 800, color: '#0F0F0F',
+-        textAlign: 'right',
+-        borderTop: '2px solid #1A1A1A',
+-        borderBottom: '2px solid #1A1A1A',
+-        whiteSpace: 'nowrap',
+-      }}>
+-        {formatFCFA(value)}
+-      </td>
+-    </tr>
+-  );
++function fmtNeg(v) {
++  const n = parseFloat(v);
++  if (!n || n === 0) return '';
++  return Math.round(n).toLocaleString('fr-FR');
+ }
+ 
+-// ── Main bulletin preview component ────────────────────────
+ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+-  const today = new Date().toLocaleDateString('fr-FR');
+-  const periode = `${MOIS[(form.mois || 1) - 1]} ${form.annee || ''}`;
+-
+   if (!agent) {
+     return (
+       <div style={{
+@@ -104,218 +59,329 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+     );
+   }
+ 
+-  const earnings = [
+-    { l: 'Salaire de base',        v: form.salaire_base },
+-    { l: 'Sursalaire',             v: form.sursalaire },
+-    { l: 'Indemnité de logement',  v: form.indemnite_logement },
+-    { l: 'Indemnité de transport', v: form.indemnite_transport },
+-    { l: 'Indemnité de fonction',  v: form.indemnite_fonction },
+-    { l: 'Prime d\'ancienneté',    v: form.prime_anciennete },
+-    { l: 'Autres primes',          v: form.autres_primes },
+-    { l: 'Heures supplémentaires', v: form.heures_sup },
+-  ].filter(r => parseFloat(r.v) > 0);
++  const moisIdx = (form.mois || 1) - 1;
++  const moisLabel = MOIS[moisIdx];
++  const annee = form.annee || '';
++
++  // Calcul date début/fin du mois
++  const dateDebut = `01/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
++  const lastDay = new Date(annee, form.mois || 1, 0).getDate();
++  const dateFin = `${lastDay}/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
++
++  const nomComplet = `${(agent.prenom || '').toUpperCase()} ${(agent.nom || '').toUpperCase()}`.trim();
++
++  // Date d'embauche
++  const dateEmb = agent.date_embauche
++    ? new Date(agent.date_embauche).toLocaleDateString('fr-FR')
++    : '—';
++
++  // Calcul ancienneté
++  let anciennete = '-';
++  if (agent.date_embauche) {
++    const emb = new Date(agent.date_embauche);
++    const ref = new Date(annee, moisIdx, 1);
++    const moisAnc = (ref.getFullYear() - emb.getFullYear()) * 12 + (ref.getMonth() - emb.getMonth());
++    if (moisAnc >= 12) {
++      const ans = Math.floor(moisAnc / 12);
++      anciennete = `${ans} an${ans > 1 ? 's' : ''}`;
++    } else if (moisAnc > 0) {
++      anciennete = `${moisAnc} mois`;
++    }
++  }
++
++  const p = preview || {};
++
++  // Exonérations : plafond calculable vs retenu réel
++  const exoLogementPlafond = p.exo_logement != null ? fmt(Math.min(
++    (p.salaire_brut_imposable || 0) * 0.20, 75000
++  )) : '';
++  const exoTransportPlafond = p.exo_transport != null ? fmt(Math.min(
++    (p.salaire_brut_imposable || 0) * 0.05, 30000
++  )) : '';
++  const exoFonctionPlafond = p.exo_fonction != null ? fmt(Math.min(
++    (p.salaire_brut_imposable || 0) * 0.05, 50000
++  )) : '';
+ 
+   return (
+     <div
+       id="bulletin-printable"
+       style={{
++        ...BASE,
+         width: '100%',
+         background: '#fff',
+-        border: '1px solid #1A1A1A',
+-        fontFamily: "'Poppins', sans-serif",
+-        color: '#1A1A1A',
++        padding: '20px 24px',
++        boxSizing: 'border-box',
+       }}
+     >
++      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
++        <colgroup>
++          <col style={{ width: '35%' }} />
++          <col style={{ width: '35%' }} />
++          <col style={{ width: '30%' }} />
++        </colgroup>
++        <tbody>
+ 
+-      {/* ── Header: logo + company ── */}
+-      <div style={{
+-        borderBottom: '2px solid #1A1A1A',
+-        padding: '16px 24px',
+-        display: 'flex', alignItems: 'center', gap: 16,
+-      }}>
+-        {entreprise?.logo_url ? (
+-          <img
+-            src={entreprise.logo_url}
+-            alt="Logo"
+-            style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }}
+-          />
+-        ) : (
+-          <div style={{
+-            width: 56, height: 56,
+-            border: '1px dashed #D4D4D4',
+-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+-            flexShrink: 0, color: '#A3A3A3', fontSize: 9,
+-          }}>
+-            LOGO
+-          </div>
+-        )}
+-        <div style={{ flex: 1 }}>
+-          <div style={{ fontWeight: 800, fontSize: 16 }}>
+-            {entreprise?.nom || 'Nom de l\'entreprise'}
+-          </div>
+-          <div style={{ fontSize: 10.5, color: '#525252', marginTop: 2 }}>
+-            {[
+-              entreprise?.siege_social,
+-              entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
+-              entreprise?.cnss_employeur ? `CNSS Employeur: ${entreprise.cnss_employeur}` : '',
+-            ].filter(Boolean).join('  |  ')}
+-          </div>
+-        </div>
+-        <div style={{ textAlign: 'right', fontSize: 10.5, color: '#525252' }}>
+-          <div>Bulletin édité le</div>
+-          <div style={{ fontWeight: 700 }}>{today}</div>
+-        </div>
+-      </div>
++          {/* ── Titre ── */}
++          <tr>
++            <td colSpan={3} style={{
++              ...CELL,
++              textAlign: 'center',
++              fontWeight: 700,
++              fontSize: 12,
++              background: '#F5C6C6',
++              padding: '5px 8px',
++            }}>
++              BULLETIN DE PAIE DE {nomComplet}
++            </td>
++          </tr>
+ 
+-      {/* ── Title bar ── */}
+-      <div style={{
+-        borderBottom: '2px solid #1A1A1A',
+-        padding: '10px 24px',
+-        textAlign: 'center',
+-      }}>
+-        <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '0.5px' }}>
+-          BULLETIN DE PAIE — {periode.toUpperCase()}
+-        </div>
+-      </div>
++          {/* ── Période ── */}
++          <tr>
++            <td style={{ ...CELL, borderRight: 'none' }}>Période du :</td>
++            <td colSpan={2} style={{ ...CELL, borderLeft: 'none' }}>
++              {dateDebut} AU {dateFin}
++            </td>
++          </tr>
+ 
+-      {/* ── Employer / Employee info ── */}
+-      <div style={{
+-        display: 'grid', gridTemplateColumns: '1fr 1fr',
+-        borderBottom: '2px solid #1A1A1A',
+-      }}>
+-        <div style={{ padding: '14px 24px', borderRight: '1px solid #D4D4D4' }}>
+-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#737373', textTransform: 'uppercase', marginBottom: 6 }}>
+-            Employeur
+-          </div>
+-          <div style={{ fontSize: 12, fontWeight: 700 }}>{entreprise?.nom || '—'}</div>
+-          <div style={{ fontSize: 11, color: '#525252', marginTop: 2 }}>
+-            Représenté par : {entreprise?.representant || '—'}
+-          </div>
+-          <div style={{ fontSize: 11, color: '#525252' }}>
+-            {entreprise?.qualite_representant || ''}
+-          </div>
+-        </div>
+-        <div style={{ padding: '14px 24px' }}>
+-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#737373', textTransform: 'uppercase', marginBottom: 6 }}>
+-            Employé(e)
+-          </div>
+-          <div style={{ fontSize: 12, fontWeight: 700 }}>
+-            {agent.prenom} {agent.nom}
+-          </div>
+-          <div style={{ fontSize: 11, color: '#525252', marginTop: 2 }}>
+-            {agent.poste || '—'} {agent.departement ? `— ${agent.departement}` : ''}
+-          </div>
+-          <div style={{ fontSize: 11, color: '#525252' }}>
+-            Matricule : {agent.matricule || '—'} | CNSS : {agent.cnss || '—'}
+-          </div>
+-        </div>
+-      </div>
++          {/* ── En-têtes colonnes ── */}
++          <tr>
++            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employeur :</td>
++            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Organisme social</td>
++            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employé</td>
++          </tr>
+ 
+-      {/* ── Main table ── */}
+-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+-        <tbody>
++          {/* ── Infos employeur / CNSS / employé ── */}
++          <tr>
++            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
++              <div style={{ fontWeight: 700 }}>{entreprise?.nom || 'FASO ARMORED'}</div>
++              {entreprise?.telephone && <div>Tél: {entreprise.telephone}</div>}
++              {entreprise?.rccm && <div>RCCM: {entreprise.rccm}</div>}
++              {entreprise?.ifu && <div>IFU: {entreprise.ifu}</div>}
++              <div style={{ marginTop: 4 }}>Date d'embauche</div>
++              <div>{dateEmb}</div>
++            </td>
++            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
++              <div>Caisse Nationale de Sécurité Sociale (CNSS)</div>
++              {entreprise?.cnss_employeur && <div>N° : {entreprise.cnss_employeur}</div>}
++            </td>
++            <td style={{ ...CELL, verticalAlign: 'top', fontWeight: 700 }}>
++              {nomComplet}
++              {agent.cnss && <div style={{ fontWeight: 400, marginTop: 4 }}>CNSS : {agent.cnss}</div>}
++            </td>
++          </tr>
++
++          {/* ── Emploi / Catégorie / Charges / Ancienneté ── */}
++          <tr>
++            <td style={CELL}>Emploi</td>
++            <td style={CELL}>Catégorie</td>
++            <td style={CELL}>Charges familiales &nbsp;&nbsp;&nbsp; Ancienneté</td>
++          </tr>
++          <tr>
++            <td style={CELL_BOLD}>{(agent.poste || '').toUpperCase()}</td>
++            <td style={CELL_BOLD}>{(agent.categorie || agent.type_contrat || '').toUpperCase()}</td>
++            <td style={CELL_BOLD}>
++              {p.personnes_a_charge || 0}
++              <span style={{ float: 'right', fontWeight: 400 }}>{anciennete}</span>
++            </td>
++          </tr>
++
++          {/* ── Salaire de base ── */}
++          <tr>
++            <td style={CELL_BOLD}>Salaire de base</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_BOLD}>{fmt(form.salaire_base)}</td>
++          </tr>
++
++          {/* ── Indemnités ── */}
++          <tr>
++            <td style={{ ...CELL, borderBottom: 'none' }}>Indemnités</td>
++            <td style={CELL}></td>
++            <td style={CELL}></td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
++            <td style={CELL}></td>
++            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_logement) > 0 ? '#F0F4EC' : undefined }}>
++              {fmt(form.indemnite_logement)}
++            </td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>{fmt(form.indemnite_transport)}</td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- fonction</td>
++            <td style={CELL}></td>
++            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_fonction) > 0 ? '#F0F4EC' : undefined }}>
++              {fmt(form.indemnite_fonction)}
++            </td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- autre</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>
++              {fmt((parseFloat(form.sursalaire) || 0) + (parseFloat(form.prime_anciennete) || 0) + (parseFloat(form.autres_primes) || 0) + (parseFloat(form.heures_sup) || 0))}
++            </td>
++          </tr>
++
++          {/* ── Salaire brut ── */}
++          <tr>
++            <td style={CELL_BOLD}>Salaire brut</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut)}</td>
++          </tr>
++
++          {/* ── CNSS ── */}
++          <tr>
++            <td style={CELL_ITALIC}>CNSS</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.cnss_salarial)}</td>
++          </tr>
++
++          {/* ── Salaire imposable ── */}
++          <tr>
++            <td style={CELL}>Salaire imposable</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>{fmt(p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0)}</td>
++          </tr>
++
++          {/* ── Contrôle CNSS fiscal ── */}
++          <tr>
++            <td style={CELL_ITALIC}>Contrôle CNSS (fiscal)</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.controle_cnss_fiscal)}</td>
++          </tr>
++
++          {/* ── Salaire imposable IUTS ── */}
++          <tr>
++            <td style={CELL_BOLD}>Salaire imposable IUTS</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut_imposable)}</td>
++          </tr>
++
++          {/* ── Contrôle des indemnités ── */}
++          <tr>
++            <td style={{ ...CELL, borderBottom: 'none' }}>Contrôle des indemnités</td>
++            <td style={CELL}></td>
++            <td style={CELL}></td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
++            <td style={{ ...CELL, textAlign: 'right' }}>{exoLogementPlafond}</td>
++            <td style={CELL_RIGHT}>{fmt(p.exo_logement)}</td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
++            <td style={{ ...CELL, textAlign: 'right' }}>{exoTransportPlafond}</td>
++            <td style={CELL_RIGHT}>{fmt(p.exo_transport)}</td>
++          </tr>
++          <tr>
++            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- fonction</td>
++            <td style={{ ...CELL, textAlign: 'right' }}>{exoFonctionPlafond}</td>
++            <td style={CELL_RIGHT}>{fmt(p.exo_fonction)}</td>
++          </tr>
++
++          {/* ── Total exonérations ── */}
++          <tr>
++            <td style={CELL_ITALIC}>Total exonérations</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.total_exonerations)}</td>
++          </tr>
+ 
+-          {/* Earnings */}
+-          <Band label="Éléments de rémunération" />
+-          {earnings.length === 0 ? (
+-            <tr>
+-              <td colSpan={2} style={{ padding: '12px 24px', fontSize: 11, color: '#A3A3A3', fontStyle: 'italic' }}>
+-                Aucun élément saisi
+-              </td>
+-            </tr>
+-          ) : earnings.map(e => <Row key={e.l} label={e.l} value={e.v} />)}
+-          <TotalRow label="SALAIRE BRUT" value={preview?.salaire_brut} />
+-
+-          {/* Tax base detail */}
+-          {preview && (
+-            <>
+-              <Band label="Base imposable IUTS" />
+-              <Row label="Salaire imposable (brut − contrôle CNSS)" value={preview.salaire_brut_imposable} muted />
+-              <Row label="Exonération logement"  value={-preview.exo_logement} muted indent />
+-              <Row label="Exonération transport" value={-preview.exo_transport} muted indent />
+-              <Row label="Exonération fonction"  value={-preview.exo_fonction} muted indent />
+-              <Row label="Abattement forfaitaire (25% base)" value={-preview.abattement_forfaitaire} muted />
+-              <TotalRow label="Base IUTS (arrondie)" value={preview.base_iuts} />
+-            </>
+-          )}
+-
+-          {/* Deductions */}
+-          <Band label="Retenues" />
+-          <Row label="CNSS salarié (5.5%, plafond 44 000 FCFA)" value={preview?.cnss_salarial} />
+-          <Row label="IUTS brut (barème progressif)" value={preview?.iuts_brut} muted />
+-          <Row label={`Abattement charges familiales (${preview?.personnes_a_charge || 0} pers.)`} value={-(preview?.abattement_familial || 0)} muted indent />
+-          <Row label="IUTS net à retenir" value={preview?.iuts} bold />
+-          <TotalRow label="TOTAL RETENUES" value={preview?.total_retenues} />
+-
+-          {/* Other deductions */}
+-          {preview && (parseFloat(form.autres_retenues) > 0 || parseFloat(form.avance_salaire) > 0) && (
+-            <>
+-              <Band label="Autres déductions" />
+-              {parseFloat(form.autres_retenues) > 0 && <Row label="Autres retenues" value={form.autres_retenues} />}
+-              {parseFloat(form.avance_salaire) > 0 && <Row label="Avance sur salaire" value={form.avance_salaire} />}
+-            </>
+-          )}
+-
+-          {/* Net salary */}
+-          <TotalRow label="NET À PAYER" value={preview?.salaire_net} big />
+-
+-          {/* Employer charge note */}
+-          <tr>
+-            <td colSpan={2} style={{ padding: '8px 12px', fontSize: 10.5, color: '#737373' }}>
+-              Charge patronale CNSS (16%) : <strong>{formatFCFA(preview?.cnss_patronal)}</strong>
++          {/* ── Abattement forfaitaire ── */}
++          <tr>
++            <td style={CELL_ITALIC}>Abattement forf.</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.abattement_forfaitaire)}</td>
++          </tr>
++
++          {/* ── Base IUTS ── */}
++          <tr>
++            <td style={CELL}>Base IUTS</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>{fmt(p.base_iuts)}</td>
++          </tr>
++
++          {/* ── IUTS ── */}
++          <tr>
++            <td style={CELL_ITALIC}>IUTS</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts_brut)}</td>
++          </tr>
++
++          {/* ── Personnes à charge ── */}
++          <tr>
++            <td style={CELL}>Personnes à charge</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>{fmt(p.personnes_a_charge)}</td>
++          </tr>
++
++          {/* ── Abattement familial ── */}
++          <tr>
++            <td style={CELL}>Abattement</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>{fmt(p.abattement_familial)}</td>
++          </tr>
++
++          {/* ── Net IUTS ── */}
++          <tr>
++            <td style={CELL_ITALIC}>Net IUTS</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts)}</td>
++          </tr>
++
++          {/* ── Retenues ── */}
++          <tr>
++            <td style={CELL}>Retenues acomptes</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}></td>
++          </tr>
++          <tr>
++            <td style={CELL}>Retenues prêts</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}></td>
++          </tr>
++          <tr>
++            <td style={CELL}>Autres retenues</td>
++            <td style={CELL}></td>
++            <td style={CELL_RIGHT}>
++              {(() => {
++                const ar = parseFloat(form.autres_retenues) || 0;
++                const av = parseFloat(form.avance_salaire) || 0;
++                return fmt(ar + av);
++              })()}
+             </td>
+           </tr>
++
++          {/* ── Salaire net ── */}
++          <tr>
++            <td style={{ ...CELL_BOLD, fontSize: 12 }}>Salaire net</td>
++            <td style={CELL}></td>
++            <td style={{ ...CELL_RIGHT_BOLD, fontSize: 12 }}>{fmt(p.salaire_net)}</td>
++          </tr>
++
+         </tbody>
+       </table>
+ 
+       {/* ── Signatures ── */}
+       <div style={{
+         display: 'grid', gridTemplateColumns: '1fr 1fr',
+-        gap: 20, padding: '24px 24px 16px',
+-        borderTop: '2px solid #1A1A1A',
++        marginTop: 24, gap: 20,
+       }}>
+-        <div style={{ textAlign: 'center' }}>
+-          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+-            {entreprise?.qualite_representant || 'L\'EMPLOYEUR'}
+-          </div>
+-          {entreprise?.mention_signataire && (
+-            <div style={{ fontSize: 9, color: '#A3A3A3', fontStyle: 'italic', marginBottom: 14 }}>
+-              {entreprise.mention_signataire}
+-            </div>
+-          )}
+-          {!entreprise?.mention_signataire && <div style={{ marginBottom: 26 }} />}
+-          <div style={{ borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 10, fontWeight: 600 }}>
++        <div>
++          <div style={{ fontWeight: 700, fontSize: 11 }}>Le Responsable RH</div>
++          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
+             {entreprise?.representant || '—'}
+           </div>
+         </div>
+-        <div style={{ textAlign: 'center' }}>
+-          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+-            L'EMPLOYÉ(E)
+-          </div>
+-          <div style={{ fontSize: 9, color: '#A3A3A3', fontStyle: 'italic', marginBottom: 14 }}>
+-            Lu et approuvé
+-          </div>
+-          <div style={{ borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 10, fontWeight: 600 }}>
+-            {agent.prenom} {agent.nom}
++        <div style={{ textAlign: 'right' }}>
++          <div style={{ fontWeight: 700, fontSize: 11 }}>L'employé</div>
++          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
++            {nomComplet}
+           </div>
+         </div>
+       </div>
+-
+-      {/* ── Footer ── */}
+-      <div style={{
+-        borderTop: '1px solid #D4D4D4',
+-        padding: '10px 24px',
+-        textAlign: 'center',
+-      }}>
+-        {entreprise?.pied_de_page && (
+-          <div style={{ fontSize: 10, color: '#737373', fontStyle: 'italic', marginBottom: 4 }}>
+-            {entreprise.pied_de_page}
+-          </div>
+-        )}
+-        <div style={{ fontSize: 9, color: '#A3A3A3' }}>
+-          Document confidentiel — Généré le {today}
+-        </div>
+-      </div>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index b176bfd..f6941f6 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -264,187 +264,309 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
+ // One A4 page per agent; each page is a complete bulletin.
+ // The function draws each bulletin onto the doc then adds a page break.
+ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+-  const today = new Date().toLocaleDateString('fr-FR');
+-  const NOIR = [26, 26, 26];
+-  const GRIS = [115, 115, 115];
+-  const GRIS_CLAIR = [240, 240, 240];
+-  let y = 14;
+-
+-  if (entreprise?.logo_url) {
+-    try { doc.addImage(entreprise.logo_url, 'PNG', 14, y - 2, 18, 18); } catch (e) {}
+-  } else {
+-    doc.setDrawColor(200, 200, 200);
+-    doc.setLineDashPattern([1, 1], 0);
+-    doc.rect(14, y - 2, 18, 18);
+-    doc.setLineDashPattern([], 0);
+-    doc.setFontSize(6);
+-    doc.setTextColor(...GRIS);
+-    doc.text('LOGO', 23, y + 7, { align: 'center' });
+-  }
+-  const tx = 36;
+-  doc.setTextColor(...NOIR);
+-  doc.setFontSize(13);
+-  doc.setFont('helvetica', 'bold');
+-  doc.text(entreprise?.nom || 'Entreprise', tx, y + 3);
+-  doc.setFontSize(8);
+-  doc.setFont('helvetica', 'normal');
+-  doc.setTextColor(...GRIS);
+-  doc.text([
+-    entreprise?.siege_social || '',
+-    entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
+-    entreprise?.cnss_employeur ? `CNSS: ${entreprise.cnss_employeur}` : '',
+-  ].filter(Boolean).join('  |  '), tx, y + 9);
+-  doc.setTextColor(...GRIS);
+-  doc.setFontSize(8);
+-  doc.text('Bulletin édité le', 196, y, { align: 'right' });
+-  doc.setFont('helvetica', 'bold');
+-  doc.setTextColor(...NOIR);
+-  doc.text(today, 196, y + 5, { align: 'right' });
+-  y += 22;
+-  doc.setDrawColor(...NOIR);
+-  doc.setLineWidth(0.6);
+-  doc.line(14, y, 196, y);
+-  y += 6;
+-
+-  doc.setFont('helvetica', 'bold');
+-  doc.setFontSize(11);
+-  doc.text(`BULLETIN DE PAIE — ${MOIS[mois - 1].toUpperCase()} ${annee}`, 105, y + 3, { align: 'center' });
+-  y += 8;
+-  doc.setLineWidth(0.6);
+-  doc.line(14, y, 196, y);
+-  y += 6;
+-
+-  doc.setFontSize(8.5);
+-  doc.setFont('helvetica', 'bold');
+-  doc.text('EMPLOYEUR', 17, y + 2);
+-  doc.text('EMPLOYÉ(E)', 107, y + 2);
+-  doc.setFont('helvetica', 'normal');
+-  doc.setFontSize(9);
+-  doc.text(entreprise?.nom || '—', 17, y + 8);
+-  doc.text(`${agent.prenom} ${agent.nom}`, 107, y + 8);
+-  doc.setFontSize(8);
+-  doc.setTextColor(...GRIS);
+-  doc.text(`Représenté par : ${entreprise?.representant || '—'}`, 17, y + 13);
+-  doc.text(`${agent.poste || '—'}${agent.departement ? ' — ' + agent.departement : ''}`, 107, y + 13);
+-  doc.text(`${entreprise?.qualite_representant || ''}`, 17, y + 18);
+-  doc.text(`Matricule : ${agent.matricule || '—'} | CNSS : ${agent.cnss || '—'}`, 107, y + 18);
+-  doc.setTextColor(...NOIR);
+-  y += 24;
+-  doc.setLineWidth(0.6);
+-  doc.line(14, y, 196, y);
+-  y += 2;
+-
+-  const band = (label) => {
+-    doc.setFillColor(...NOIR);
+-    doc.rect(14, y, 182, 6.5, 'F');
+-    doc.setTextColor(255, 255, 255);
+-    doc.setFont('helvetica', 'bold');
+-    doc.setFontSize(8.5);
+-    doc.text(label.toUpperCase(), 17, y + 4.5);
+-    doc.setTextColor(...NOIR);
+-    y += 8.5;
+-  };
+-  const row = (label, val, opts = {}) => {
+-    doc.setDrawColor(220, 220, 220);
+-    doc.setLineWidth(0.2);
+-    doc.line(14, y + 5, 196, y + 5);
+-    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+-    doc.setFontSize(9);
+-    doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
+-    doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
+-    doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
+-    doc.setTextColor(...NOIR);
+-    y += 6.2;
+-  };
+-  const totalRow = (label, val, big = false) => {
+-    const h = big ? 9 : 7.5;
+-    doc.setFillColor(...GRIS_CLAIR);
+-    doc.rect(14, y, 182, h, 'F');
+-    doc.setDrawColor(...NOIR);
+-    doc.setLineWidth(0.5);
+-    doc.line(14, y, 196, y);
+-    doc.line(14, y + h, 196, y + h);
+-    doc.setFont('helvetica', 'bold');
+-    doc.setFontSize(big ? 12 : 10);
+-    doc.text(label, 17, y + (big ? 6.3 : 5.2));
+-    doc.text(Math.round(val).toLocaleString('fr-FR') + ' FCFA', 193, y + (big ? 6.3 : 5.2), { align: 'right' });
+-    y += h + 3;
++  // ── Format identique au modèle Excel FASO ARMORED ──
++  const NOIR  = [26, 26, 26];
++  const GRIS  = [115, 115, 115];
++  const ROUGE_CLAIR = [245, 198, 198]; // titre rose/rouge clair comme Excel
++
++  // Colonnes : L=14, col1=14..90, col2=90..150, col3=150..196
++  const L = 14, R = 196;
++  const C1 = 90, C2 = 150; // séparateurs colonnes
++  const W = R - L; // 182
++
++  let y = 12;
++
++  // Helpers PDF tableau ──────────────────────────────────
++  // Dessine une ligne de tableau 3 colonnes (ou 2 avec colspan)
++  // cells = [{ text, x1, x2, bold, italic, align, bg, fontSize }]
++  const drawRow = (cells, rowH = 6) => {
++    cells.forEach(cell => {
++      const x1 = cell.x1;
++      const x2 = cell.x2;
++      // fond
++      if (cell.bg) {
++        doc.setFillColor(...cell.bg);
++        doc.rect(x1, y, x2 - x1, rowH, 'F');
++      }
++      // bordure
++      doc.setDrawColor(153, 153, 153);
++      doc.setLineWidth(0.3);
++      doc.rect(x1, y, x2 - x1, rowH);
++      // texte
++      if (!cell.text && cell.text !== 0) return;
++      doc.setFont('helvetica', cell.bold ? 'bold' : cell.italic ? 'italic' : 'normal');
++      doc.setFontSize(cell.fontSize || 9);
++      doc.setTextColor(...(cell.color || NOIR));
++      const align = cell.align || 'left';
++      const tx = align === 'right' ? x2 - 2 : align === 'center' ? (x1 + x2) / 2 : x1 + 2;
++      doc.text(String(cell.text), tx, y + rowH * 0.68, { align });
++    });
++    y += rowH;
+   };
+ 
+-  band('Éléments de rémunération');
+-  const earnings = [
+-    { label: 'Salaire de base',        val: bulletin.salaire_base },
+-    { label: 'Sursalaire',             val: bulletin.sursalaire },
+-    { label: 'Indemnité de logement',  val: bulletin.indemnite_logement },
+-    { label: 'Indemnité de transport', val: bulletin.indemnite_transport },
+-    { label: 'Indemnité de fonction',  val: bulletin.indemnite_fonction },
+-    { label: 'Prime d\'ancienneté',    val: bulletin.prime_anciennete },
+-    { label: 'Autres primes',          val: bulletin.autres_primes },
+-    { label: 'Heures supplémentaires', val: bulletin.heures_sup },
+-  ];
+-  earnings.filter(e => e.val > 0).forEach(e => row(e.label, e.val));
+-  totalRow('SALAIRE BRUT', bulletin.salaire_brut);
+-  y += 2;
+-
+-  band('Base imposable IUTS');
+-  row('Salaire imposable (brut - contrôle CNSS)', bulletin.salaire_brut_imposable, { muted: true });
+-  row('Exonération logement', -bulletin.exo_logement, { indent: true, muted: true });
+-  row('Exonération transport', -bulletin.exo_transport, { indent: true, muted: true });
+-  row('Exonération fonction', -bulletin.exo_fonction, { indent: true, muted: true });
+-  row('Abattement forfaitaire (25%)', -bulletin.abattement_forfaitaire, { indent: true, muted: true });
+-  totalRow('BASE IUTS', bulletin.base_iuts);
+-  y += 2;
++  const fmtN = (v) => {
++    const n = parseFloat(v);
++    if (!n || n === 0) return '';
++    return Math.round(n).toLocaleString('fr-FR');
++  };
+ 
+-  band('Retenues');
+-  row('CNSS salarié (5.5%, plafond 44 000)', bulletin.cnss_salarial);
+-  row('IUTS brut', bulletin.iuts_brut);
+-  row(`Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, -bulletin.abattement_familial, { indent: true, muted: true });
+-  row('Net IUTS', bulletin.iuts);
+-  totalRow('TOTAL RETENUES', bulletin.total_retenues);
+-  y += 2;
++  const nomComplet = `${(agent.prenom || '').toUpperCase()} ${(agent.nom || '').toUpperCase()}`.trim();
++  const dateEmb = agent.date_embauche
++    ? new Date(agent.date_embauche).toLocaleDateString('fr-FR') : '—';
++
++  // Ancienneté
++  let anciennete = '-';
++  if (agent.date_embauche) {
++    const emb = new Date(agent.date_embauche);
++    const ref = new Date(annee, mois - 1, 1);
++    const moisAnc = (ref.getFullYear() - emb.getFullYear()) * 12 + (ref.getMonth() - emb.getMonth());
++    if (moisAnc >= 12) { const ans = Math.floor(moisAnc / 12); anciennete = `${ans} an${ans > 1 ? 's' : ''}`; }
++    else if (moisAnc > 0) anciennete = `${moisAnc} mois`;
++  }
+ 
+-  band('Net à payer');
+-  if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+-  if (bulletin.avance_salaire > 0)  row('Avance sur salaire', bulletin.avance_salaire);
+-  totalRow('NET À PAYER', bulletin.salaire_net, true);
++  // Période
++  const lastDay = new Date(annee, mois, 0).getDate();
++  const dateDebut = `01/${String(mois).padStart(2, '0')}/${annee}`;
++  const dateFin = `${lastDay}/${String(mois).padStart(2, '0')}/${annee}`;
++
++  // Exo plafonds
++  const imposable = bulletin.salaire_brut_imposable || 0;
++  const exoLogPlafond = fmtN(Math.min(imposable * 0.20, 75000));
++  const exoTraPlafond = fmtN(Math.min(imposable * 0.05, 30000));
++  const exoFonPlafond = fmtN(Math.min(imposable * 0.05, 50000));
++
++  // ── Titre ──────────────────────────────────────────────
++  drawRow([{
++    text: `BULLETIN DE PAIE DE ${nomComplet}`,
++    x1: L, x2: R, bold: true, fontSize: 10, align: 'center', bg: ROUGE_CLAIR,
++  }], 7);
++
++  // ── Période ──
++  drawRow([
++    { text: 'Période du :', x1: L, x2: C1, bold: false },
++    { text: `${dateDebut} AU ${dateFin}`, x1: C1, x2: R, colspan: true },
++  ], 5.5);
++
++  // ── En-têtes colonnes ──
++  drawRow([
++    { text: 'Employeur :', x1: L, x2: C1, bold: true },
++    { text: 'Organisme social', x1: C1, x2: C2, bold: true, align: 'center' },
++    { text: 'Employé', x1: C2, x2: R, bold: true, align: 'center' },
++  ], 5.5);
++
++  // ── Infos employeur/CNSS/employé (bloc multi-lignes) ──
++  const infoH = 26;
++  // Fond blanc, bordures
++  doc.setDrawColor(153, 153, 153); doc.setLineWidth(0.3);
++  doc.rect(L, y, C1 - L, infoH);
++  doc.rect(C1, y, C2 - C1, infoH);
++  doc.rect(C2, y, R - C2, infoH);
++
++  // Employeur
++  let iy = y + 4;
++  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
++  doc.text(entreprise?.nom || 'FASO ARMORED', L + 2, iy);
++  iy += 4.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
++  if (entreprise?.telephone) { doc.text(`Tél: ${entreprise.telephone}`, L + 2, iy); iy += 3.5; }
++  if (entreprise?.rccm) { doc.text(`RCCM: ${entreprise.rccm}`, L + 2, iy); iy += 3.5; }
++  if (entreprise?.ifu) { doc.text(`IFU: ${entreprise.ifu}`, L + 2, iy); iy += 3.5; }
++  doc.setTextColor(...NOIR); doc.text("Date d'embauche", L + 2, iy); iy += 3.5;
++  doc.text(dateEmb, L + 2, iy);
++
++  // CNSS
++  doc.setTextColor(...NOIR); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
++  doc.text('Caisse Nationale de', C1 + 2, y + 5);
++  doc.text('Sécurité Sociale', C1 + 2, y + 9);
++  doc.text('(CNSS)', C1 + 2, y + 13);
++  if (entreprise?.cnss_employeur) doc.text(`N° : ${entreprise.cnss_employeur}`, C1 + 2, y + 18);
++
++  // Employé
++  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
++  doc.text(nomComplet, C2 + 2, y + 5);
++  if (agent.cnss) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(`CNSS : ${agent.cnss}`, C2 + 2, y + 10); }
++
++  y += infoH;
++
++  // ── Emploi / Catégorie / Charges / Ancienneté ──
++  drawRow([
++    { text: 'Emploi', x1: L, x2: C1 },
++    { text: 'Catégorie', x1: C1, x2: C2 },
++    { text: `Charges familiales               Ancienneté`, x1: C2, x2: R, fontSize: 8 },
++  ], 5);
++  drawRow([
++    { text: (agent.poste || '').toUpperCase(), x1: L, x2: C1, bold: true },
++    { text: (agent.categorie || agent.type_contrat || '').toUpperCase(), x1: C1, x2: C2, bold: true },
++    { text: `${bulletin.personnes_a_charge || 0}               ${anciennete}`, x1: C2, x2: R, bold: true, fontSize: 8 },
++  ], 5.5);
++
++  // ── Salaire de base ──
++  drawRow([
++    { text: 'Salaire de base', x1: L, x2: C1, bold: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.salaire_base), x1: C2, x2: R, bold: true, align: 'right' },
++  ], 5.5);
++
++  // ── Indemnités header ──
++  drawRow([
++    { text: 'Indemnités', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: '', x1: C2, x2: R },
++  ], 4.5);
++
++  const indRow = (label, val, greenBg = false) => drawRow([
++    { text: label, x1: L + 3, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(val), x1: C2, x2: R, align: 'right', bg: greenBg && val > 0 ? [240, 244, 236] : undefined },
++  ], 5);
++
++  indRow('- logement',  bulletin.indemnite_logement,  true);
++  indRow('- transport', bulletin.indemnite_transport,  false);
++  indRow('- fonction',  bulletin.indemnite_fonction,   true);
++  const autreVal = (parseFloat(bulletin.sursalaire) || 0) + (parseFloat(bulletin.prime_anciennete) || 0)
++    + (parseFloat(bulletin.autres_primes) || 0) + (parseFloat(bulletin.heures_sup) || 0);
++  indRow('- autre', autreVal, false);
++
++  // ── Salaire brut ──
++  drawRow([
++    { text: 'Salaire brut', x1: L, x2: C1, bold: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.salaire_brut), x1: C2, x2: R, bold: true, align: 'right' },
++  ], 5.5);
++
++  // ── CNSS (italic) ──
++  drawRow([
++    { text: 'CNSS', x1: L, x2: C1, italic: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.cnss_salarial), x1: C2, x2: R, italic: true, align: 'right' },
++  ], 5);
++
++  // ── Salaire imposable ──
++  const salImposable = (bulletin.salaire_brut || 0) - (bulletin.cnss_salarial || 0);
++  drawRow([
++    { text: 'Salaire imposable', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(salImposable), x1: C2, x2: R, align: 'right' },
++  ], 5);
++
++  // ── Contrôle CNSS fiscal (italic) ──
++  drawRow([
++    { text: 'Contrôle CNSS (fiscal)', x1: L, x2: C1, italic: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.controle_cnss_fiscal), x1: C2, x2: R, italic: true, align: 'right' },
++  ], 5);
++
++  // ── Salaire imposable IUTS (bold) ──
++  drawRow([
++    { text: 'Salaire imposable IUTS', x1: L, x2: C1, bold: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.salaire_brut_imposable), x1: C2, x2: R, bold: true, align: 'right' },
++  ], 5.5);
++
++  // ── Contrôle des indemnités header ──
++  drawRow([
++    { text: 'Contrôle des indemnités', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: '', x1: C2, x2: R },
++  ], 4.5);
++
++  const exoRow = (label, plafond, retenu) => drawRow([
++    { text: label, x1: L + 3, x2: C1 },
++    { text: plafond, x1: C1, x2: C2, align: 'right' },
++    { text: retenu, x1: C2, x2: R, align: 'right' },
++  ], 5);
++
++  exoRow('- logement',  exoLogPlafond, fmtN(bulletin.exo_logement));
++  exoRow('- transport', exoTraPlafond, fmtN(bulletin.exo_transport));
++  exoRow('- fonction',  exoFonPlafond, fmtN(bulletin.exo_fonction));
++
++  // ── Total exonérations (italic) ──
++  drawRow([
++    { text: 'Total exonérations', x1: L, x2: C1, italic: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.total_exonerations), x1: C2, x2: R, italic: true, align: 'right' },
++  ], 5);
++
++  // ── Abattement forfaitaire (italic) ──
++  drawRow([
++    { text: 'Abattement forf.', x1: L, x2: C1, italic: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.abattement_forfaitaire), x1: C2, x2: R, italic: true, align: 'right' },
++  ], 5);
++
++  // ── Base IUTS ──
++  drawRow([
++    { text: 'Base IUTS', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.base_iuts), x1: C2, x2: R, align: 'right' },
++  ], 5.5);
++
++  // ── IUTS brut (italic) ──
++  drawRow([
++    { text: 'IUTS', x1: L, x2: C1, italic: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.iuts_brut), x1: C2, x2: R, italic: true, align: 'right' },
++  ], 5);
++
++  // ── Personnes à charge ──
++  drawRow([
++    { text: 'Personnes à charge', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.personnes_a_charge), x1: C2, x2: R, align: 'right' },
++  ], 5);
++
++  // ── Abattement familial ──
++  drawRow([
++    { text: 'Abattement', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.abattement_familial), x1: C2, x2: R, align: 'right' },
++  ], 5);
++
++  // ── Net IUTS (italic bold) ──
++  drawRow([
++    { text: 'Net IUTS', x1: L, x2: C1, italic: true, bold: true },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.iuts), x1: C2, x2: R, italic: true, bold: true, align: 'right' },
++  ], 5.5);
++
++  // ── Retenues ──
++  drawRow([
++    { text: 'Retenues acomptes', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: '', x1: C2, x2: R },
++  ], 5);
++  drawRow([
++    { text: 'Retenues prêts', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: '', x1: C2, x2: R },
++  ], 5);
++  const autresRetTotal = (parseFloat(bulletin.autres_retenues) || 0) + (parseFloat(bulletin.avance_salaire) || 0);
++  drawRow([
++    { text: 'Autres retenues', x1: L, x2: C1 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(autresRetTotal), x1: C2, x2: R, align: 'right' },
++  ], 5);
++
++  // ── Salaire net (bold, plus grand) ──
++  drawRow([
++    { text: 'Salaire net', x1: L, x2: C1, bold: true, fontSize: 10 },
++    { text: '', x1: C1, x2: C2 },
++    { text: fmtN(bulletin.salaire_net), x1: C2, x2: R, bold: true, fontSize: 10, align: 'right' },
++  ], 7);
+ 
+-  doc.setFontSize(8);
+-  doc.setTextColor(...GRIS);
+-  doc.setFont('helvetica', 'normal');
+-  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 4);
+-  doc.setTextColor(...NOIR);
+-  y += 14;
++  y += 6;
+ 
+-  if (y > 245) { doc.addPage(); y = 20; }
+-  doc.setDrawColor(...NOIR);
+-  doc.setLineWidth(0.5);
+-  doc.line(14, y, 196, y);
+-  y += 8;
+-  doc.setFont('helvetica', 'bold');
+-  doc.setFontSize(9);
+-  doc.text(entreprise?.qualite_representant || 'L\'EMPLOYEUR', 40, y, { align: 'center' });
+-  doc.text('L\'EMPLOYÉ(E)', 170, y, { align: 'center' });
+-  doc.setFont('helvetica', 'normal');
+-  doc.setFontSize(7.5);
+-  doc.setTextColor(...GRIS);
+-  doc.text(entreprise?.mention_signataire || 'Cachet et signature', 40, y + 5, { align: 'center' });
+-  doc.text('Lu et approuvé', 170, y + 5, { align: 'center' });
+-  doc.setTextColor(...NOIR);
+-  y += 22;
+-  doc.setDrawColor(...NOIR);
+-  doc.line(14, y, 70, y);
+-  doc.line(130, y, 195, y);
+-  doc.setFontSize(8);
+-  doc.text(entreprise?.representant || '', 42, y + 4, { align: 'center' });
+-  doc.text(`${agent.prenom} ${agent.nom}`, 162, y + 4, { align: 'center' });
+-  y += 12;
+-  doc.setFontSize(7);
+-  doc.setTextColor(...GRIS);
+-  if (entreprise?.pied_de_page) {
+-    doc.text(entreprise.pied_de_page, 105, y, { align: 'center' });
+-    y += 5;
+-  }
+-  doc.text(`Bulletin généré le ${today} — Document confidentiel`, 105, y, { align: 'center' });
++  // ── Signatures ──────────────────────────────────────────
++  if (y > 250) { doc.addPage(); y = 20; }
++  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
++  doc.text('Le Responsable RH', 50, y, { align: 'center' });
++  doc.text("L'employé", 160, y, { align: 'center' });
++  y += 16;
++  doc.setDrawColor(...NOIR); doc.setLineWidth(0.4);
++  doc.line(14, y, 86, y);
++  doc.line(130, y, 196, y);
++  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
++  doc.text(entreprise?.representant || '', 50, y + 4, { align: 'center' });
++  doc.text(nomComplet, 163, y + 4, { align: 'center' });
+ }
+ 
+ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress) {
+-- 
+2.43.0
+
+
+From c99867c305800bc4537f88c83af0ceedcce5ee45 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 16:02:49 +0000
+Subject: [PATCH 11/13] =?UTF-8?q?fix:=20supprimer=20variables=20inutilis?=
+ =?UTF-8?q?=C3=A9es=20(lint=20ESLint)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js | 11 +----------
+ src/pages/Paie.js                 |  1 -
+ 2 files changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index 4f7147c..8cf1232 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -2,7 +2,7 @@
+ // Layout identique au modèle Excel fourni
+ 
+ import React from 'react';
+-import { formatFCFA } from '../lib/calcPaie';
++// formatFCFA importé pour compatibilité externe si besoin
+ 
+ const MOIS = [
+   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+@@ -30,8 +30,6 @@ const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
+ const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
+ 
+ // Cellule sans bordure gauche/droite pour les lignes de regroupement
+-const CELL_INNER = { ...CELL, borderLeft: 'none', borderRight: 'none' };
+-
+ function fmt(v) {
+   if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
+   const n = parseFloat(v);
+@@ -39,12 +37,6 @@ function fmt(v) {
+   return Math.round(n).toLocaleString('fr-FR');
+ }
+ 
+-function fmtNeg(v) {
+-  const n = parseFloat(v);
+-  if (!n || n === 0) return '';
+-  return Math.round(n).toLocaleString('fr-FR');
+-}
+-
+ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+   if (!agent) {
+     return (
+@@ -60,7 +52,6 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+   }
+ 
+   const moisIdx = (form.mois || 1) - 1;
+-  const moisLabel = MOIS[moisIdx];
+   const annee = form.annee || '';
+ 
+   // Calcul date début/fin du mois
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index f6941f6..d4c9dce 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -272,7 +272,6 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+   // Colonnes : L=14, col1=14..90, col2=90..150, col3=150..196
+   const L = 14, R = 196;
+   const C1 = 90, C2 = 150; // séparateurs colonnes
+-  const W = R - L; // 182
+ 
+   let y = 12;
+ 
+-- 
+2.43.0
+
+
+From 044cb4236353b1e5ea9f041d25599d8ddb9ee312 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 16:06:48 +0000
+Subject: [PATCH 12/13] =?UTF-8?q?fix:=20supprimer=20constante=20MOIS=20inu?=
+ =?UTF-8?q?tilis=C3=A9e=20(lint)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ src/components/BulletinPreview.js | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index 8cf1232..50d9a9b 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -4,10 +4,6 @@
+ import React from 'react';
+ // formatFCFA importé pour compatibilité externe si besoin
+ 
+-const MOIS = [
+-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+-];
+ 
+ // ── Styles de base ────────────────────────────────────────
+ const BASE = {
+-- 
+2.43.0
+
+
+From b430afd56f9fc9476e202b53e8e2aedcafc35e67 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 16:22:12 +0000
+Subject: [PATCH 13/13] feat: charges_familiales direct field + calcPaie exact
+ Excel logic
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- calcPaie.js: réécriture complète conforme au modèle Excel FASO ARMORED
+  - Pas d'arrondi intermédiaire (CNSS reste décimal)
+  - salaire_imposable_affiche = brut - CNSS (affichage bulletin)
+  - salaire_brut_imposable = brut - contrôle_fiscal (base calcul exos)
+  - charges_familiales entier direct sur l'agent
+  - salaire_net = Math.round(brut - cnss - iuts - autres - avance)
+
+- Agents.js: ajout champ charges_familiales (0-7) dans formulaire agent
+
+- Paie.js: passe charges_familiales de l'agent à calculerBulletin()
+  au lieu de situation_matrimoniale + nombre_enfants
+
+- BulletinPreview.js: utilise salaire_imposable_affiche pour la ligne
+  "Salaire imposable"
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js |   2 +-
+ src/lib/calcPaie.js               | 191 ++++++++++++++----------------
+ src/pages/Agents.js               |   5 +-
+ src/pages/Paie.js                 |  17 +--
+ 4 files changed, 102 insertions(+), 113 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index 50d9a9b..a4b997f 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -230,7 +230,7 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+           <tr>
+             <td style={CELL}>Salaire imposable</td>
+             <td style={CELL}></td>
+-            <td style={CELL_RIGHT}>{fmt(p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0)}</td>
++            <td style={CELL_RIGHT}>{fmt(p.salaire_imposable_affiche != null ? p.salaire_imposable_affiche : (p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0))}</td>
+           </tr>
+ 
+           {/* ── Contrôle CNSS fiscal ── */}
+diff --git a/src/lib/calcPaie.js b/src/lib/calcPaie.js
+index f1cfb6d..104a559 100644
+--- a/src/lib/calcPaie.js
++++ b/src/lib/calcPaie.js
+@@ -1,40 +1,40 @@
+ // calcPaie.js - Burkina Faso payroll calculation engine
+-// Logic replicated from AIMDIGITAL payroll Excel model (AZARIA sheet)
++// Logic replicated from FASO ARMORED payroll Excel model
+ //
+ // Calculation order:
+ // 1. Salaire brut = somme des éléments de rémunération
+-// 2. CNSS salarié = 5.5% du brut, plafonné à 44 000 FCFA
+-// 3. Contrôle CNSS fiscal = MIN(salaire_base x 8%, CNSS réelle)
+-// 4. Salaire imposable IUTS = brut - contrôle fiscal (ou - CNSS réelle si plus petite)
+-// 5. Exonérations sur indemnités (logement/transport/fonction), plafonnées
++// 2. CNSS salarié = 5.5% du brut, plafonné à 44 000 FCFA (valeur décimale, pas arrondie)
++// 3. Contrôle CNSS fiscal = salaire_base × 8%
++// 4. Salaire imposable IUTS = brut - contrôle fiscal
++// 5. Exonérations sur indemnités (logement 20%/75k, transport 5%/30k, fonction 5%/50k)
++//    plafonnées à l'indemnité réelle payée
+ // 6. Abattement forfaitaire = 25% du salaire de base
+-// 7. Base IUTS = imposable - exonérations - abattement (arrondie à la centaine inférieure)
+-// 8. IUTS brut = barème progressif par tranches
+-// 9. Abattement charges familiales = % selon nombre de personnes à charge (max 7)
++// 7. Base IUTS = imposable_IUTS - exonérations - abattement (arrondie à la centaine inférieure)
++// 8. IUTS brut = barème progressif par tranches (sur base arrondie)
++// 9. Abattement charges familiales = % selon nombre de personnes à charge
++//    (charges_familiales = champ direct sur l'agent)
+ // 10. Net IUTS = IUTS brut - abattement familial
+-// 11. Salaire net avant déduction = brut - CNSS - Net IUTS - autres retenues
+-// 12. Salaire net = net avant déduction - avance sur salaire (pas de retenue 1%)
++// 11. Salaire net = brut - CNSS - Net IUTS - autres retenues - avance
++// NB: pas d'arrondi intermédiaire sauf base IUTS et salaire net final
+ 
+ // ── CNSS constants ────────────────────────────────────────
+ const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
+ const CNSS_PLAFOND_MONTANT = 44000;   // Monthly cap on CNSS contribution (FCFA)
+ const CNSS_FISCAL_TAUX     = 0.08;    // 8% control rate on base salary
+-const CNSS_PATRONAL_TAUX   = 0.16;    // 16% employer contribution (from sheet H28)
++const CNSS_PATRONAL_TAUX   = 0.16;    // 16% employer contribution
+ 
+-// ── Exemption caps for allowances (used to compute taxable base) ──
+-const EXO_LOGEMENT_TAUX   = 0.20;
++// ── Exemption caps for allowances ──────────────────────────
++const EXO_LOGEMENT_TAUX    = 0.20;
+ const EXO_LOGEMENT_PLAFOND = 75000;
+ const EXO_TRANSPORT_TAUX   = 0.05;
+ const EXO_TRANSPORT_PLAFOND = 30000;
+ const EXO_FONCTION_TAUX    = 0.05;
+ const EXO_FONCTION_PLAFOND = 50000;
+ 
+-// ── Flat-rate allowance (abattement forfaitaire) ──────────
++// ── Flat-rate allowance ───────────────────────────────────
+ const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
+ 
+-
+ // ── IUTS progressive brackets (monthly taxable base) ──────
+-// Replicated exactly from the AZARIA sheet (F3:G11)
+ const IUTS_BAREME = [
+   { plafond: 10000,     taux: 0     },
+   { plafond: 20000,     taux: 0     },
+@@ -47,8 +47,8 @@ const IUTS_BAREME = [
+   { plafond: Infinity,  taux: 0.25  },
+ ];
+ 
+-// ── Family charge abatement rates (D38 in sheet) ──────────
+-// Index = number of dependents (1 spouse + up to 6 children = max 7)
++// ── Family charge abatement rates ─────────────────────────
++// charges_familiales = nombre direct de personnes à charge (champ agent)
+ const ABATTEMENT_CHARGES = {
+   0: 0,
+   1: 0.08,
+@@ -57,41 +57,26 @@ const ABATTEMENT_CHARGES = {
+   4: 0.14,
+   5: 0.16,
+   6: 0.18,
+-  7: 0.20, // 7 and above
++  7: 0.20,
+ };
+ 
+-// ── Maximum number of dependent children for abatement ────
+-export const MAX_ENFANTS_CHARGE = 6;
+-
+-// ── Calculate number of dependents for IUTS abatement ─────
+-// 1 dependent for spouse (if married) + up to 6 children
+-export function calculerPersonnesACharge(situationMatrimoniale, nombreEnfants = 0) {
+-  let charges = 0;
+-  if (situationMatrimoniale === 'Marié(e)') charges += 1;
+-  charges += Math.min(parseInt(nombreEnfants) || 0, MAX_ENFANTS_CHARGE);
+-  return Math.min(charges, 7);
+-}
+-
+ // ── Calculate CNSS employee contribution (capped) ─────────
+ export function calculerCNSS(salaireBrut) {
+   const brut = parseFloat(salaireBrut) || 0;
+-  const cnss = brut * CNSS_TAUX;
+-  return Math.round(Math.min(cnss, CNSS_PLAFOND_MONTANT));
++  return Math.min(brut * CNSS_TAUX, CNSS_PLAFOND_MONTANT);
+ }
+ 
+ // ── Calculate employer CNSS contribution ──────────────────
+ export function calculerCNSSPatronal(salaireBrut) {
+   const brut = parseFloat(salaireBrut) || 0;
+-  return Math.round(brut * CNSS_PATRONAL_TAUX);
++  return brut * CNSS_PATRONAL_TAUX;
+ }
+ 
+ // ── Calculate progressive IUTS from taxable base ──────────
+-// Cumulative bracket calculation, exactly as the Excel nested IF (D36)
+ export function calculerIUTSBrut(baseIUTS) {
+   const base = Math.max(0, parseFloat(baseIUTS) || 0);
+   let impot = 0;
+   let plafondPrecedent = 0;
+-
+   for (const tranche of IUTS_BAREME) {
+     if (base <= tranche.plafond) {
+       impot += (base - plafondPrecedent) * tranche.taux;
+@@ -101,19 +86,20 @@ export function calculerIUTSBrut(baseIUTS) {
+       plafondPrecedent = tranche.plafond;
+     }
+   }
+-  return Math.round(impot);
++  return impot;
+ }
+ 
+ // ── Calculate family charge abatement on gross IUTS ───────
+-export function calculerAbattementFamilial(iutsBrut, personnesACharge) {
+-  const taux = ABATTEMENT_CHARGES[Math.min(personnesACharge, 7)] || 0;
+-  return Math.round(iutsBrut * taux);
++export function calculerAbattementFamilial(iutsBrut, chargesFamiliales) {
++  const charges = Math.min(parseInt(chargesFamiliales) || 0, 7);
++  const taux = ABATTEMENT_CHARGES[charges] || 0;
++  return iutsBrut * taux;
+ }
+ 
+-// ── Full payroll calculation — replicates AZARIA sheet ────
++// ── Full payroll calculation ───────────────────────────────
+ export function calculerBulletin(data) {
+   const {
+-    salaire_base         = 0,
++    salaire_base          = 0,
+     sursalaire            = 0,
+     indemnite_logement    = 0,
+     indemnite_transport   = 0,
+@@ -123,78 +109,71 @@ export function calculerBulletin(data) {
+     heures_sup            = 0,
+     autres_retenues       = 0,
+     avance_salaire        = 0,
+-    situation_matrimoniale = 'Célibataire',
+-    nombre_enfants        = 0,
++    charges_familiales    = 0,  // champ direct de l'agent
+   } = data;
+ 
+-  const sBase       = parseFloat(salaire_base) || 0;
+-  const sSursalaire = parseFloat(sursalaire) || 0;
+-  const sLogement   = parseFloat(indemnite_logement) || 0;
+-  const sTransport  = parseFloat(indemnite_transport) || 0;
+-  const sFonction   = parseFloat(indemnite_fonction) || 0;
+-  const sAnciennete = parseFloat(prime_anciennete) || 0;
++  const sBase         = parseFloat(salaire_base) || 0;
++  const sSursalaire   = parseFloat(sursalaire) || 0;
++  const sLogement     = parseFloat(indemnite_logement) || 0;
++  const sTransport    = parseFloat(indemnite_transport) || 0;
++  const sFonction     = parseFloat(indemnite_fonction) || 0;
++  const sAnciennete   = parseFloat(prime_anciennete) || 0;
+   const sAutresPrimes = parseFloat(autres_primes) || 0;
+-  const sHeuresSup  = parseFloat(heures_sup) || 0;
+-  const sAutresRetenues = parseFloat(autres_retenues) || 0;
+-  const sAvance     = parseFloat(avance_salaire) || 0;
+-
+-  // ── Step 1: Salaire brut (D23) ──
+-  const salaire_brut = Math.round(
+-    sBase + sSursalaire + sLogement + sTransport +
+-    sFonction + sAnciennete + sAutresPrimes + sHeuresSup
+-  );
++  const sHeuresSup    = parseFloat(heures_sup) || 0;
++  const sAutresRet    = parseFloat(autres_retenues) || 0;
++  const sAvance       = parseFloat(avance_salaire) || 0;
++  const nCharges      = Math.min(parseInt(charges_familiales) || 0, 7);
+ 
+-  // ── Step 2: CNSS salarié, plafonné à 44 000 (D24) ──
+-  const cnss_salarial = calculerCNSS(salaire_brut);
++  // ── Step 1: Salaire brut ──
++  const salaire_brut = sBase + sSursalaire + sLogement + sTransport
++    + sFonction + sAnciennete + sAutresPrimes + sHeuresSup;
+ 
+-  // ── Step 3: Contrôle CNSS fiscal = MIN(base x 8%, CNSS réelle) (D26) ──
+-  const controle_cnss_fiscal = Math.round(Math.min(sBase * CNSS_FISCAL_TAUX, cnss_salarial));
+-
+-  // ── Step 4: Salaire imposable IUTS (D27) ──
+-  // = brut - contrôle fiscal (si contrôle <= CNSS réelle, sinon brut - CNSS réelle)
+-  const salaire_imposable_iuts = Math.round(
+-    controle_cnss_fiscal <= cnss_salarial
+-      ? salaire_brut - controle_cnss_fiscal
+-      : salaire_brut - cnss_salarial
+-  );
++  // ── Step 2: CNSS salarié (décimal, pas arrondi) ──
++  const cnss_salarial = calculerCNSS(salaire_brut);
+ 
+-  // ── Step 5: Exonérations sur indemnités (D29:D31) ──
+-  const exo_logement_calc  = Math.min(salaire_imposable_iuts * EXO_LOGEMENT_TAUX, EXO_LOGEMENT_PLAFOND);
+-  const exo_logement       = Math.round(Math.min(exo_logement_calc, sLogement));
++  // ── Step 3: Contrôle CNSS fiscal ──
++  const controle_cnss_fiscal = sBase * CNSS_FISCAL_TAUX;
+ 
+-  const exo_transport_calc = Math.min(salaire_imposable_iuts * EXO_TRANSPORT_TAUX, EXO_TRANSPORT_PLAFOND);
+-  const exo_transport      = Math.round(Math.min(exo_transport_calc, sTransport));
++  // ── Step 4: Salaire imposable IUTS (pour calcul exo) ──
++  const salaire_brut_imposable = salaire_brut - controle_cnss_fiscal;
+ 
+-  const exo_fonction_calc  = Math.min(salaire_imposable_iuts * EXO_FONCTION_TAUX, EXO_FONCTION_PLAFOND);
+-  const exo_fonction       = Math.round(Math.min(exo_fonction_calc, sFonction));
++  // ── Salaire imposable (affiché = brut - CNSS) ──
++  const salaire_imposable_affiche = salaire_brut - cnss_salarial;
+ 
++  // ── Step 5: Exonérations sur indemnités ──
++  const exo_logement = Math.min(
++    Math.min(salaire_brut_imposable * EXO_LOGEMENT_TAUX, EXO_LOGEMENT_PLAFOND),
++    sLogement
++  );
++  const exo_transport = Math.min(
++    Math.min(salaire_brut_imposable * EXO_TRANSPORT_TAUX, EXO_TRANSPORT_PLAFOND),
++    sTransport
++  );
++  const exo_fonction = Math.min(
++    Math.min(salaire_brut_imposable * EXO_FONCTION_TAUX, EXO_FONCTION_PLAFOND),
++    sFonction
++  );
+   const total_exonerations = exo_logement + exo_transport + exo_fonction;
+ 
+-  // ── Step 6: Abattement forfaitaire = 25% du salaire de base (D33) ──
+-  const abattement_forfaitaire = Math.round(sBase * ABATTEMENT_FORFAITAIRE_TAUX);
++  // ── Step 6: Abattement forfaitaire ──
++  const abattement_forfaitaire = sBase * ABATTEMENT_FORFAITAIRE_TAUX;
+ 
+-  // ── Step 7: Base IUTS, arrondie à la centaine inférieure (D34) ──
+-  const baseIutsRaw = salaire_imposable_iuts - total_exonerations - abattement_forfaitaire;
++  // ── Step 7: Base IUTS (arrondie à la centaine inférieure) ──
++  const baseIutsRaw = salaire_brut_imposable - total_exonerations - abattement_forfaitaire;
+   const base_iuts = Math.floor(Math.max(0, baseIutsRaw) / 100) * 100;
+ 
+-  // ── Step 8: IUTS brut via barème progressif (D36) ──
++  // ── Step 8: IUTS brut ──
+   const iuts_brut = calculerIUTSBrut(base_iuts);
+ 
+-  // ── Step 9: Personnes à charge + abattement familial (D37/D38) ──
+-  const personnes_a_charge = calculerPersonnesACharge(situation_matrimoniale, nombre_enfants);
+-  const abattement_familial = calculerAbattementFamilial(iuts_brut, personnes_a_charge);
++  // ── Step 9: Abattement charges familiales ──
++  const personnes_a_charge = nCharges;
++  const abattement_familial = calculerAbattementFamilial(iuts_brut, nCharges);
+ 
+-  // ── Step 10: Net IUTS (D39) ──
++  // ── Step 10: Net IUTS ──
+   const iuts = Math.max(0, iuts_brut - abattement_familial);
+ 
+-  // ── Step 11: Salaire net avant déduction (D41) ──
+-  const salaire_net_avant_deduction = Math.ceil(
+-    salaire_brut - cnss_salarial - iuts - sAutresRetenues
+-  );
+-
+-  // ── Step 12: Salaire net final = net avant déduction - avance (pas de retenue 1%) ──
+-  const retenue_effort_guerre = 0; // supprimé — non applicable
+-  const salaire_net = Math.round(salaire_net_avant_deduction - sAvance);
++  // ── Step 11: Salaire net ──
++  const salaire_net = Math.round(salaire_brut - cnss_salarial - iuts - sAutresRet - sAvance);
+ 
+   // ── Employer contribution ──
+   const cnss_patronal = calculerCNSSPatronal(salaire_brut);
+@@ -203,7 +182,8 @@ export function calculerBulletin(data) {
+     salaire_brut,
+     cnss_salarial,
+     controle_cnss_fiscal,
+-    salaire_brut_imposable: salaire_imposable_iuts,
++    salaire_imposable_affiche,   // brut - CNSS (ligne "Salaire imposable" du bulletin)
++    salaire_brut_imposable,      // brut - contrôle fiscal (base calcul exo)
+     exo_logement,
+     exo_transport,
+     exo_fonction,
+@@ -215,17 +195,28 @@ export function calculerBulletin(data) {
+     abattement_familial,
+     iuts,
+     total_retenues: cnss_salarial + iuts,
+-    salaire_net_avant_deduction,
+-    retenue_effort_guerre,
++    salaire_net_avant_deduction: salaire_brut - cnss_salarial - iuts - sAutresRet,
++    retenue_effort_guerre: 0,
+     avance_salaire: sAvance,
+     salaire_net,
+     cnss_patronal,
+-    nombre_parts: personnes_a_charge, // kept for compatibility with display code
++    nombre_parts: personnes_a_charge,
++    charges_familiales: nCharges,
+   };
+ }
+ 
++// ── Kept for backward compat ───────────────────────────────
++export function calculerPersonnesACharge(situationMatrimoniale, nombreEnfants = 0) {
++  let charges = 0;
++  if (situationMatrimoniale === 'Marié(e)') charges += 1;
++  charges += Math.min(parseInt(nombreEnfants) || 0, 6);
++  return Math.min(charges, 7);
++}
++
++export const MAX_ENFANTS_CHARGE = 6;
++
+ // ── Format FCFA amount ────────────────────────────────────
+ export function formatFCFA(montant) {
+   if (montant === null || montant === undefined || isNaN(montant)) return '—';
+   return Math.round(montant).toLocaleString('fr-FR') + ' FCFA';
+-}
+\ No newline at end of file
++}
+diff --git a/src/pages/Agents.js b/src/pages/Agents.js
+index 2dccf38..76c3f01 100644
+--- a/src/pages/Agents.js
++++ b/src/pages/Agents.js
+@@ -29,7 +29,7 @@ const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
+ const EMPTY_FORM = {
+   matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
+   lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
+-  nombre_enfants: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
++  nombre_enfants: 0, charges_familiales: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
+   email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
+   diplome: '', specialite: '', poste: '', departement: '',
+   categorie_socioprofessionnelle: '', type_contrat: 'CDI',
+@@ -133,6 +133,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+       indemnite_transport: a.indemnite_transport || 0,
+       indemnite_fonction:  a.indemnite_fonction || 0,
+       nombre_enfants:      a.nombre_enfants || 0,
++      charges_familiales:  a.charges_familiales || 0,
+       cnib:                a.cnib || '',
+     });
+     setEditAgent(a);
+@@ -158,6 +159,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
+       indemnite_transport: parseFloat(form.indemnite_transport) || 0,
+       indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
+       nombre_enfants:      parseInt(form.nombre_enfants) || 0,
++      charges_familiales:  parseInt(form.charges_familiales) || 0,
+       date_naissance:      form.date_naissance || null,
+       date_embauche:       form.date_embauche || null,
+       date_fin_contrat:    form.date_fin_contrat || null,
+@@ -812,6 +814,7 @@ function importExcel(file) {
+                 </select>
+               </div>
+               <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
++              <div className="form-group"><label>Charges familiales (personnes à charge)</label><input type="number" min="0" max="7" value={form.charges_familiales} onChange={e => setF('charges_familiales', e.target.value)} placeholder="0 à 7" /></div>
+               <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
+               <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
+               <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index d4c9dce..fdf3d46 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
+ import { getInitials, avatarColor } from '../lib/helpers';
+ import { peutFaire } from '../lib/useProfil';
+ import {
+-  calculerBulletin, calculerPersonnesACharge, formatFCFA,
++  calculerBulletin, formatFCFA,
+ } from '../lib/calcPaie';
+ import {
+   DollarSign, Plus, FileText, Search,
+@@ -598,8 +598,7 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
+       heures_sup:           0,
+       autres_retenues:      0,
+       avance_salaire:       0,
+-      situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
+-      nombre_enfants:         agent.nombre_enfants || 0,
++      charges_familiales:   agent.charges_familiales || 0,
+     });
+ 
+     const bulletin = {
+@@ -799,8 +798,7 @@ export default function Paie({ agents, entreprise, profil }) {
+           heures_sup:             0,
+           autres_retenues:        0,
+           avance_salaire:         totalAvances,
+-          situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
+-          nombre_enfants:         agent.nombre_enfants || 0,
++          charges_familiales:     agent.charges_familiales || 0,
+         });
+ 
+         const bulletinData = {
+@@ -917,8 +915,7 @@ export default function Paie({ agents, entreprise, profil }) {
+   const selectedAgent = getAgent(form.agent_id);
+   const preview = form.agent_id && form.salaire_base ? calculerBulletin({
+     ...form,
+-    situation_matrimoniale: selectedAgent?.situation_matrimoniale || 'Célibataire',
+-    nombre_enfants: selectedAgent?.nombre_enfants || 0,
++    charges_familiales: selectedAgent?.charges_familiales || 0,
+   }) : null;
+ 
+   // ── Save bulletin ──
+@@ -931,8 +928,7 @@ export default function Paie({ agents, entreprise, profil }) {
+     const agent = getAgent(form.agent_id);
+     const calc = calculerBulletin({
+       ...form,
+-      situation_matrimoniale: agent?.situation_matrimoniale || 'Célibataire',
+-      nombre_enfants: agent?.nombre_enfants || 0,
++      charges_familiales: agent?.charges_familiales || 0,
+     });
+ 
+     const data = {
+@@ -1306,8 +1302,7 @@ export default function Paie({ agents, entreprise, profil }) {
+                   borderRadius: 8, fontSize: 11, color: '#92400E',
+                 }}>
+                   Situation : <strong>{selectedAgent.situation_matrimoniale || 'Célibataire'}</strong>
+-                  {' '}— {selectedAgent.nombre_enfants || 0} enfant(s) à charge
+-                  {' '}({calculerPersonnesACharge(selectedAgent.situation_matrimoniale, selectedAgent.nombre_enfants)} pers. retenues, max 6 enfants)
++                  {' '}— {selectedAgent.nombre_enfants || 0} enfant(s) — Charges familiales : <strong>{selectedAgent.charges_familiales || 0}</strong> pers.
+                 </div>
+               )}
+ 
+-- 
+2.43.0
+

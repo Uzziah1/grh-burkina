@@ -1,0 +1,189 @@
+From d09ef8f6099ee340d1ee2927403d2dc1a3b48dfb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 13:56:39 +0000
+Subject: [PATCH] =?UTF-8?q?feat(paie):=20G=C3=A9n=C3=A9rer=20et=20enregist?=
+ =?UTF-8?q?rer=20tous=20les=20bulletins=20en=20un=20clic?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Nouveau bouton "Générer et enregistrer tous" qui pour chaque agent éligible :
+  1. Récupère les avances approuvées en attente et les déduit automatiquement
+  2. Calcule le bulletin complet (CNSS/IUTS)
+  3. Upsert dans bulletins_paie (agent_id, mois, annee)
+  4. Lie les avances au bulletin sauvegardé (deduite_bulletin_id)
+  5. Dessine la page PDF correspondante
+- Génère et télécharge le PDF groupé après tous les enregistrements
+- Ancien bouton renommé "PDF seulement" (sans enregistrement)
+- Ajout classe CSS btn-success (vert)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/index.css     |   2 +
+ src/pages/Paie.js | 123 +++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 123 insertions(+), 2 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index 010717b..66db277 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -178,6 +178,8 @@ body {
+ }
+ .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+ 
++.btn-success { background: #16A34A; color: var(--white); border: 1px solid #16A34A; }
++.btn-success:hover { background: #15803d; transform: translateY(-1px); }
+ .btn-danger { background: var(--danger); color: var(--white); }
+ .btn-danger:hover { background: #b91c1c; }
+ 
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index f6c4b4f..b1a19fa 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -632,6 +632,111 @@ export default function Paie({ agents, entreprise, profil }) {
+     setGenerateProgress(null);
+   }
+ 
++  // ── Generate + save all bulletins to DB, then PDF ──
++  async function handleGenererEtSauvegarder() {
++    if (!window.confirm(`Générer et enregistrer tous les bulletins pour ${MOIS[filterMois - 1]} ${filterAnnee} ?\nLes bulletins existants seront mis à jour.`)) return;
++    setGenerating(true);
++    setGenerateProgress({ current: 0, total: 0, nom: '' });
++    try {
++      const firstOfMonth = new Date(filterAnnee, filterMois - 1, 1);
++      const eligible = (agents || []).filter(a => {
++        if (a.type_contrat === 'VDP' || a.type_contrat === 'Stagiaire') return false;
++        if (a.statut !== 'Actif') return false;
++        if (!a.date_embauche) return false;
++        return new Date(a.date_embauche) <= firstOfMonth;
++      });
++
++      if (eligible.length === 0) {
++        showToast('Aucun agent éligible pour cette période', 'warning');
++        setGenerating(false);
++        setGenerateProgress(null);
++        return;
++      }
++
++      let savedCount = 0;
++      const doc = new jsPDF();
++
++      for (let i = 0; i < eligible.length; i++) {
++        const agent = eligible[i];
++        setGenerateProgress({ current: i + 1, total: eligible.length, nom: `${agent.prenom} ${agent.nom}` });
++
++        // Fetch pending approved advances for this agent
++        const { data: avancesData } = await supabase
++          .from('avances')
++          .select('*')
++          .eq('agent_id', agent.id)
++          .eq('statut', 'Approuvé')
++          .is('deduite_bulletin_id', null);
++        const avances = avancesData || [];
++        const totalAvances = avances.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0);
++
++        const calc = calculerBulletin({
++          salaire_base:           agent.salaire_brut || 0,
++          sursalaire:             agent.sursalaire || 0,
++          indemnite_logement:     agent.indemnite_logement || 0,
++          indemnite_transport:    agent.indemnite_transport || 0,
++          indemnite_fonction:     agent.indemnite_fonction || 0,
++          prime_anciennete:       0,
++          autres_primes:          0,
++          heures_sup:             0,
++          autres_retenues:        0,
++          avance_salaire:         totalAvances,
++          situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
++          nombre_enfants:         agent.nombre_enfants || 0,
++        });
++
++        const bulletinData = {
++          agent_id:             agent.id,
++          mois:                 filterMois,
++          annee:                filterAnnee,
++          salaire_base:         agent.salaire_brut || 0,
++          sursalaire:           agent.sursalaire || 0,
++          indemnite_logement:   agent.indemnite_logement || 0,
++          indemnite_transport:  agent.indemnite_transport || 0,
++          indemnite_fonction:   agent.indemnite_fonction || 0,
++          prime_anciennete:     0,
++          autres_primes:        0,
++          heures_sup:           0,
++          autres_retenues:      0,
++          avance_salaire:       totalAvances,
++          statut:               'Brouillon',
++          created_by:           profil?.id,
++          ...calc,
++        };
++
++        const { data: savedBulletin, error } = await supabase
++          .from('bulletins_paie')
++          .upsert(bulletinData, { onConflict: 'agent_id,mois,annee' })
++          .select()
++          .single();
++
++        if (!error) {
++          savedCount++;
++          // Link advances to this bulletin
++          if (avances.length > 0 && savedBulletin?.id) {
++            await supabase
++              .from('avances')
++              .update({ deduite_bulletin_id: savedBulletin.id })
++              .in('id', avances.map(a => a.id));
++          }
++        }
++
++        // Draw on PDF
++        if (i > 0) doc.addPage();
++        const bulletinForPDF = { mois: filterMois, annee: filterAnnee, ...bulletinData, ...calc };
++        drawBulletinOnDoc(doc, bulletinForPDF, agent, entreprise, filterMois, filterAnnee);
++      }
++
++      doc.save(`bulletins_${MOIS[filterMois - 1]}_${filterAnnee}.pdf`);
++      showToast(`${savedCount}/${eligible.length} bulletins enregistrés et PDF téléchargé`, 'success');
++      loadBulletins();
++    } catch (e) {
++      showToast('Erreur : ' + e.message, 'error');
++    }
++    setGenerating(false);
++    setGenerateProgress(null);
++  }
++
+   // ── Print the on-screen bulletin preview ──
+   function handlePrint() {
+     const printContent = document.getElementById('bulletin-printable');
+@@ -831,14 +936,28 @@ export default function Paie({ agents, entreprise, profil }) {
+           className="btn btn-secondary btn-sm"
+           onClick={handleGenererTous}
+           disabled={generating}
+-          title="Générer un PDF avec tous les bulletins du mois"
++          title="Générer un PDF avec tous les bulletins du mois (sans enregistrement)"
+         >
+           <FileText size={14} />
+           {generating
+             ? generateProgress?.total > 0
+               ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
+               : 'Génération…'
+-            : 'Générer tous les bulletins'
++            : 'PDF seulement'
++          }
++        </button>
++        <button
++          className="btn btn-success btn-sm"
++          onClick={handleGenererEtSauvegarder}
++          disabled={generating}
++          title="Calculer, enregistrer dans la base et télécharger le PDF pour tous les agents éligibles"
++        >
++          <Save size={14} />
++          {generating
++            ? generateProgress?.total > 0
++              ? `${generateProgress.current}/${generateProgress.total} — ${generateProgress.nom}`
++              : 'Enregistrement…'
++            : 'Générer et enregistrer tous'
+           }
+         </button>
+         <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+-- 
+2.43.0
+
