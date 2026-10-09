@@ -1,11 +1,9 @@
 // EtatSalaires.js - Monthly payroll summary page
-// Replicates the "ETAT DES SALAIRES" recap sheet from the AIMDIGITAL Excel model
-// Shows one row per agent (validated bulletins only) + a TOTAL GENERAL row
+// Mirrors the Excel "ETAT DES SALAIRES" layout exactly (single bloc, no category split)
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { peutFaire } from '../lib/useProfil';
-import { formatFCFA } from '../lib/calcPaie';
 import {
   FileSpreadsheet, Printer, FileText,
   Users, DollarSign, Calendar,
@@ -14,7 +12,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-// ── Months list ───────────────────────────────────────────
+// ── Months ────────────────────────────────────────────────
 const MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
@@ -22,192 +20,285 @@ const MOIS = [
 
 const NOW = new Date();
 
-// ── Generate state number, e.g. ETAT N°004/2026 ───────────
-function getEtatNumber(mois, annee) {
+// ── Helpers ───────────────────────────────────────────────
+function fmt(val) {
+  return Math.round(parseFloat(val) || 0).toLocaleString('fr-FR');
+}
+
+// For PDF (no locale, space separator)
+function fmtPDF(val) {
+  const n = Math.round(parseFloat(val) || 0);
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+function sum(arr, key) {
+  return arr.reduce((s, b) => s + (parseFloat(b[key]) || 0), 0);
+}
+
+function getEtatNum(mois, annee) {
   return `${String(mois).padStart(3, '0')}/${annee}`;
 }
 
-// ── Format number with safe space separator for PDF rendering ──
-function formatNombrePDF(val) {
-  const n = Math.round(parseFloat(val) || 0);
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
-// ── Generate PDF: landscape table, mirrors Excel layout ───
+// ── PDF export — paysage, miroir du tableau Excel ─────────
 function generateEtatPDF(bulletins, entreprise, mois, annee) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const today = new Date().toLocaleDateString('fr-FR');
-  const etatNum = getEtatNumber(mois, annee);
+  const etatNum = getEtatNum(mois, annee);
+  const nomMois = MOIS[mois - 1].toUpperCase();
+  const nomEntreprise = (entreprise?.nom || 'L\'ENTREPRISE').toUpperCase();
+  const ville = entreprise?.ville || 'OUAGADOUGOU';
 
-  // ── Header ──
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${entreprise?.ville || 'OUAGADOUGOU'}, le ${today}`, 14, 14);
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text(
-    `ETAT N°${etatNum}/RECAPITULATIF DES SALAIRES DE ${(entreprise?.nom || 'L\'ENTREPRISE').toUpperCase()} DU MOIS DE ${MOIS[mois - 1].toUpperCase()} ${annee}`,
-    148, 22, { align: 'center' }
-  );
-
-  // ── Table data ──
-  const head = [[
-    'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
-    'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
-    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
-  ]];
-
-  const body = bulletins.map((b, i) => [
-  i + 1,
-  `${b.agents?.prenom || ''} ${b.agents?.nom || ''}`,
-  b.agents?.poste || '',
-  formatNombrePDF(b.salaire_base),
-  formatNombrePDF(b.indemnite_fonction),
-  formatNombrePDF(b.heures_sup),
-  formatNombrePDF(b.indemnite_logement),
-  formatNombrePDF(b.indemnite_transport),
-  formatNombrePDF(b.salaire_brut),
-  formatNombrePDF(b.cnss_salarial),
-  formatNombrePDF(b.iuts),
-  formatNombrePDF(b.salaire_net_avant_deduction),
-  formatNombrePDF(b.salaire_net),
-]);
-
-  // ── Totals row ──
-  const sum = (key) => bulletins.reduce((s, b) => s + (parseFloat(b[key]) || 0), 0);
-const totalRow = [
-  '', 'TOTAL GÉNÉRAL', '',
-  formatNombrePDF(sum('salaire_base')),
-  formatNombrePDF(sum('indemnite_fonction')),
-  formatNombrePDF(sum('heures_sup')),
-  formatNombrePDF(sum('indemnite_logement')),
-  formatNombrePDF(sum('indemnite_transport')),
-  formatNombrePDF(sum('salaire_brut')),
-  formatNombrePDF(sum('cnss_salarial')),
-  formatNombrePDF(sum('iuts')),
-  formatNombrePDF(sum('salaire_net_avant_deduction')),
-  formatNombrePDF(sum('salaire_net')),
-];
-
-  autoTable(doc, {
-  head,
-  body: [...body, totalRow],
-  startY: 28,
-  theme: 'grid',
-  styles: { fontSize: 7, font: 'helvetica', textColor: [26, 26, 26], lineColor: [26, 26, 26], lineWidth: 0.2 },
-  headStyles: { fillColor: [26, 26, 26], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
-  columnStyles: {
-    0: { halign: 'center', cellWidth: 8 },
-    1: { cellWidth: 38 },
-    2: { cellWidth: 24 },
-    3: { halign: 'right' },
-    4: { halign: 'right' },
-    5: { halign: 'right' },
-    6: { halign: 'right' },
-    7: { halign: 'right' },
-    8: { halign: 'right', fontStyle: 'bold' },
-    9: { halign: 'right' },
-    10: { halign: 'right' },
-    11: { halign: 'right' },
-    12: { halign: 'right', fontStyle: 'bold' },
-  },
-  didParseCell: (data) => {
-    if (data.row.index === body.length) {
-      data.cell.styles.fillColor = [240, 240, 240];
-      data.cell.styles.fontStyle = 'bold';
-    }
-  },
-});
-
-  // ── Footer note ──
-  const finalY = (doc.lastAutoTable?.finalY || 28) + 10;
-  const totalNetLettres = formatNombrePDF(sum('salaire_net'));
+  // En-tête
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Arrêté le présent état à la somme de : ${totalNetLettres} FCFA`, 14, finalY);
+  doc.text(`${ville}, le ${today}`, 14, 12);
 
-  // ── Signature ──
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(entreprise?.qualite_representant || 'Le Gérant', 250, finalY + 20, { align: 'center' });
-  if (entreprise?.mention_signataire) {
+  doc.text(
+    `ETAT N°${etatNum}/RECAPITULATIF DES SALAIRES DE ${nomEntreprise} DU MOIS DE ${nomMois} ${annee}`,
+    148, 20, { align: 'center' }
+  );
+
+  // En-têtes colonnes (2 niveaux comme dans Excel)
+  const head = [
+    [
+      { content: 'N°',            rowSpan: 2 },
+      { content: 'Noms et prénoms', rowSpan: 2 },
+      { content: 'Fonction',      rowSpan: 2 },
+      { content: 'Salaire de base', rowSpan: 2 },
+      { content: 'AVANTAGES',     colSpan: 4, styles: { halign: 'center' } },
+      { content: 'Salaire brut',  rowSpan: 2 },
+      { content: 'Nb jours',      rowSpan: 2 },
+      { content: 'RETENUES',      colSpan: 2, styles: { halign: 'center' } },
+      { content: 'Sal. avant déd.', rowSpan: 2 },
+      { content: 'Retenue 1%',    rowSpan: 2 },
+      { content: 'Avance',        rowSpan: 2 },
+      { content: 'Salaire net',   rowSpan: 2 },
+    ],
+    [
+      'Indem Resp', 'Indem H.Sup', 'Indem Logmt', 'Indem Trsprt',
+      'CNSS', 'IUTS',
+    ],
+  ];
+
+  const body = bulletins.map((b, i) => [
+    i + 1,
+    `${b.agents?.prenom || ''} ${b.agents?.nom || ''}`.trim(),
+    b.agents?.poste || '',
+    fmtPDF(b.salaire_base),
+    fmtPDF(b.indemnite_fonction),
+    fmtPDF(b.heures_sup || 0),
+    fmtPDF(b.indemnite_logement),
+    fmtPDF(b.indemnite_transport),
+    fmtPDF(b.salaire_brut),
+    b.jours_travailles || 'MOIS PLEIN',
+    fmtPDF(b.cnss_salarial),
+    fmtPDF(b.iuts),
+    fmtPDF(b.salaire_net_avant_deduction),
+    fmtPDF(b.retenue_effort_guerre),
+    fmtPDF(b.avance_salaire),
+    fmtPDF(b.salaire_net),
+  ]);
+
+  const totRow = [
+    { content: '', styles: { fontStyle: 'bold' } },
+    { content: 'TOTAL GÉNÉRAL', styles: { fontStyle: 'bold' } },
+    '',
+    fmtPDF(sum(bulletins, 'salaire_base')),
+    fmtPDF(sum(bulletins, 'indemnite_fonction')),
+    fmtPDF(sum(bulletins, 'heures_sup')),
+    fmtPDF(sum(bulletins, 'indemnite_logement')),
+    fmtPDF(sum(bulletins, 'indemnite_transport')),
+    fmtPDF(sum(bulletins, 'salaire_brut')),
+    '',
+    fmtPDF(sum(bulletins, 'cnss_salarial')),
+    fmtPDF(sum(bulletins, 'iuts')),
+    fmtPDF(sum(bulletins, 'salaire_net_avant_deduction')),
+    fmtPDF(sum(bulletins, 'retenue_effort_guerre')),
+    fmtPDF(sum(bulletins, 'avance_salaire')),
+    fmtPDF(sum(bulletins, 'salaire_net')),
+  ];
+
+  autoTable(doc, {
+    head,
+    body: [...body, totRow],
+    startY: 25,
+    theme: 'grid',
+    styles: {
+      fontSize: 6.5, font: 'helvetica',
+      textColor: [26, 26, 26],
+      lineColor: [26, 26, 26], lineWidth: 0.2,
+      cellPadding: 1.5,
+    },
+    headStyles: {
+      fillColor: [26, 26, 26], textColor: [255, 255, 255],
+      fontStyle: 'bold', halign: 'center', fontSize: 6.5,
+    },
+    columnStyles: {
+      0:  { halign: 'center', cellWidth: 7 },
+      1:  { cellWidth: 34 },
+      2:  { cellWidth: 22 },
+      3:  { halign: 'right', cellWidth: 14 },
+      4:  { halign: 'right', cellWidth: 12 },
+      5:  { halign: 'right', cellWidth: 12 },
+      6:  { halign: 'right', cellWidth: 13 },
+      7:  { halign: 'right', cellWidth: 13 },
+      8:  { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+      9:  { halign: 'center', cellWidth: 14 },
+      10: { halign: 'right', cellWidth: 12 },
+      11: { halign: 'right', cellWidth: 11 },
+      12: { halign: 'right', cellWidth: 14 },
+      13: { halign: 'right', cellWidth: 11 },
+      14: { halign: 'right', cellWidth: 13 },
+      15: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+    },
+    didParseCell: (data) => {
+      if (data.row.index === body.length) {
+        data.cell.styles.fillColor = [230, 230, 230];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  const finalY = (doc.lastAutoTable?.finalY || 25) + 8;
+  const totalNet = Math.round(sum(bulletins, 'salaire_net'));
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `Arrêté le présent état à la somme de : ${fmtPDF(totalNet)} FCFA`,
+    14, finalY
+  );
+
+  // Signature
+  const sigX = 250;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text(entreprise?.qualite_representant || 'LE GERANT', sigX, finalY + 18, { align: 'center' });
+  if (entreprise?.representant_nom) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(entreprise.mention_signataire, 250, finalY + 25, { align: 'center' });
+    doc.text(entreprise.representant_nom, sigX, finalY + 24, { align: 'center' });
+  }
+  if (entreprise?.mention_signataire) {
+    doc.setFontSize(7);
+    doc.text(entreprise.mention_signataire, sigX, finalY + 29, { align: 'center' });
   }
 
   doc.save(`etat_salaires_${MOIS[mois - 1]}_${annee}.pdf`);
 }
 
-// ── Export to Excel, mirrors the original sheet layout ────
+// ── Excel export — miroir exact du fichier modèle ─────────
 function exportEtatExcel(bulletins, entreprise, mois, annee) {
-  const etatNum = getEtatNumber(mois, annee);
+  const etatNum = getEtatNum(mois, annee);
   const today = new Date().toLocaleDateString('fr-FR');
+  const nomMois = MOIS[mois - 1].toUpperCase();
+  const nomEntreprise = (entreprise?.nom || '').toUpperCase();
+  const ville = entreprise?.ville || 'OUAGADOUGOU';
 
-  const rows = [
-    [`${entreprise?.ville || 'OUAGADOUGOU'}, le ${today}`],
-    [],
-    [`ETAT N°${etatNum}/RECAPITULATIF DES SALAIRES DE ${(entreprise?.nom || '').toUpperCase()} DU MOIS DE ${MOIS[mois - 1].toUpperCase()} ${annee}`],
-    [],
-    [
-      'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
-      'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
-      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
-    ],
-  ];
+  // Lignes brutes (format aoa)
+  const rows = [];
 
+  // Ligne ville + date
+  rows.push([`${ville}, le ${today}`]);
+  rows.push([]);
+
+  // Titre
+  rows.push([
+    `ETAT N°${etatNum}/RECAPITULATIF DES SALAIRES DE ${nomEntreprise} DU MOIS DE ${nomMois} ${annee}`,
+  ]);
+  rows.push([]);
+
+  // En-tête (2 lignes fusionnées manuellement)
+  rows.push([
+    'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
+    'INDEM DE RESP', 'INDEM D\'H SUP', 'INDEM DE LOGMT', 'INDEM DE TRSPRT',
+    'Salaire brut', 'Nombre de jours', 'CNSS', 'IUTS',
+    'Salaire avant déduction', 'Retenue 1%', 'Avance sur salaire', 'Salaire net',
+  ]);
+
+  // Données
   bulletins.forEach((b, i) => {
     rows.push([
       i + 1,
-      `${b.agents?.prenom || ''} ${b.agents?.nom || ''}`,
+      `${b.agents?.prenom || ''} ${b.agents?.nom || ''}`.trim(),
       b.agents?.poste || '',
-      b.salaire_base || 0,
-      b.indemnite_fonction || 0,
-      b.heures_sup || 0,
-      b.indemnite_logement || 0,
-      b.indemnite_transport || 0,
-      b.salaire_brut || 0,
-      b.cnss_salarial || 0,
-      b.iuts || 0,
-      b.salaire_net_avant_deduction || 0,
-      b.salaire_net || 0,
+      Math.round(b.salaire_base || 0),
+      Math.round(b.indemnite_fonction || 0),
+      Math.round(b.heures_sup || 0),
+      Math.round(b.indemnite_logement || 0),
+      Math.round(b.indemnite_transport || 0),
+      Math.round(b.salaire_brut || 0),
+      b.jours_travailles || 'MOIS PLEIN',
+      Math.round(b.cnss_salarial || 0),
+      Math.round(b.iuts || 0),
+      Math.round(b.salaire_net_avant_deduction || 0),
+      Math.round(b.retenue_effort_guerre || 0),
+      Math.round(b.avance_salaire || 0),
+      Math.round(b.salaire_net || 0),
     ]);
   });
 
-  const sum = (key) => bulletins.reduce((s, b) => s + (parseFloat(b[key]) || 0), 0);
+  // Ligne total
   rows.push([
     '', 'TOTAL GÉNÉRAL', '',
-    sum('salaire_base'), sum('indemnite_fonction'), sum('heures_sup'),
-    sum('indemnite_logement'), sum('indemnite_transport'), sum('salaire_brut'),
-    sum('cnss_salarial'), sum('iuts'), sum('salaire_net_avant_deduction'),
-    sum('salaire_net'),
+    Math.round(sum(bulletins, 'salaire_base')),
+    Math.round(sum(bulletins, 'indemnite_fonction')),
+    Math.round(sum(bulletins, 'heures_sup')),
+    Math.round(sum(bulletins, 'indemnite_logement')),
+    Math.round(sum(bulletins, 'indemnite_transport')),
+    Math.round(sum(bulletins, 'salaire_brut')),
+    '',
+    Math.round(sum(bulletins, 'cnss_salarial')),
+    Math.round(sum(bulletins, 'iuts')),
+    Math.round(sum(bulletins, 'salaire_net_avant_deduction')),
+    Math.round(sum(bulletins, 'retenue_effort_guerre')),
+    Math.round(sum(bulletins, 'avance_salaire')),
+    Math.round(sum(bulletins, 'salaire_net')),
   ]);
 
   rows.push([]);
-  rows.push(['Arrêté le présent état à la somme de :', Math.round(sum('salaire_net'))]);
+  rows.push([
+    `Arrêté le présent état à la somme de : ${fmt(sum(bulletins, 'salaire_net'))} FCFA`,
+  ]);
+  rows.push([]);
+
+  // Signature
+  if (entreprise?.qualite_representant) {
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      entreprise.qualite_representant]);
+  }
+  if (entreprise?.representant_nom) {
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      entreprise.representant_nom]);
+  }
+  if (entreprise?.mention_signataire) {
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      entreprise.mention_signataire]);
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [
-    { wch: 5 }, { wch: 28 }, { wch: 18 }, { wch: 14 },
-    { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+    { wch: 5 }, { wch: 28 }, { wch: 20 }, { wch: 14 },
+    { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 13 },
+    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 },
+    { wch: 18 }, { wch: 11 }, { wch: 16 }, { wch: 14 },
   ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Etat des salaires');
   XLSX.writeFile(wb, `etat_salaires_${MOIS[mois - 1]}_${annee}.xlsx`);
 }
 
-// ── Main EtatSalaires component ───────────────────────────
+// ── Composant principal ───────────────────────────────────
 export default function EtatSalaires({ entreprise, profil }) {
   const [bulletins, setBulletins] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [mois, setMois] = useState(NOW.getMonth() + 1);
-  const [annee, setAnnee] = useState(NOW.getFullYear());
+  const [loading, setLoading]     = useState(true);
+  const [mois, setMois]           = useState(NOW.getMonth() + 1);
+  const [annee, setAnnee]         = useState(NOW.getFullYear());
 
-  useEffect(() => {
-    loadBulletins();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mois, annee]);
+  useEffect(() => { loadBulletins(); /* eslint-disable-next-line */ }, [mois, annee]);
 
   async function loadBulletins() {
     setLoading(true);
@@ -224,18 +315,18 @@ export default function EtatSalaires({ entreprise, profil }) {
 
   const years = Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
 
-  // ── Stats ──
-  const totalBrut = bulletins.reduce((s, b) => s + (b.salaire_brut || 0), 0);
-  const totalNet  = bulletins.reduce((s, b) => s + (b.salaire_net || 0), 0);
-  const totalCNSS = bulletins.reduce((s, b) => s + (b.cnss_salarial || 0), 0);
-  const totalIUTS = bulletins.reduce((s, b) => s + (b.iuts || 0), 0);
+  // Totaux
+  const totalBrut = sum(bulletins, 'salaire_brut');
+  const totalNet  = sum(bulletins, 'salaire_net');
+  const totalCNSS = sum(bulletins, 'cnss_salarial');
+  const totalIUTS = sum(bulletins, 'iuts');
 
-  // ── Access guard ──
-if (!peutFaire(profil, 'voirEtatSalaires')) {
+  if (!peutFaire(profil, 'voirEtatSalaires')) {
     return (
       <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        height: 400, color: '#A3A3A3', fontFamily: 'Poppins, sans-serif', textAlign: 'center',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', height: 400, color: '#A3A3A3',
+        fontFamily: 'Poppins, sans-serif', textAlign: 'center',
       }}>
         <p style={{ fontSize: 15, fontWeight: 600, color: '#737373' }}>Accès restreint</p>
         <p style={{ fontSize: 13 }}>Vous n'avez pas les permissions nécessaires.</p>
@@ -243,14 +334,12 @@ if (!peutFaire(profil, 'voirEtatSalaires')) {
     );
   }
 
+  const colSpan = 16;
+
   return (
     <div>
-
-      {/* ── Period selector + actions ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        gap: 10, marginBottom: 24, flexWrap: 'wrap',
-      }}>
+      {/* ── Sélecteur période + actions ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
         <select className="filter-select" value={mois} onChange={e => setMois(parseInt(e.target.value))}>
           {MOIS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
@@ -276,19 +365,19 @@ if (!peutFaire(profil, 'voirEtatSalaires')) {
         </button>
       </div>
 
-      {/* ── Stats ── */}
+      {/* ── Cartes stats ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Agents payés',  value: bulletins.length, color: '#E8920A', icon: Users },
-          { label: 'Masse brute',   value: formatFCFA(totalBrut), color: '#2563EB', icon: DollarSign },
-          { label: 'Total retenues (CNSS+IUTS)', value: formatFCFA(totalCNSS + totalIUTS), color: '#DC2626', icon: FileText },
-          { label: 'Masse nette',   value: formatFCFA(totalNet), color: '#16A34A', icon: Calendar },
+          { label: 'Agents payés',           value: bulletins.length,                  color: '#E8920A', icon: Users },
+          { label: 'Masse brute',             value: fmt(totalBrut) + ' FCFA',          color: '#2563EB', icon: DollarSign },
+          { label: 'Retenues (CNSS + IUTS)',  value: fmt(totalCNSS + totalIUTS) + ' FCFA', color: '#DC2626', icon: FileText },
+          { label: 'Masse nette',             value: fmt(totalNet) + ' FCFA',           color: '#16A34A', icon: Calendar },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div className="stat-label">{s.label}</div>
-                <div className="stat-value" style={{ color: s.color, fontSize: 17 }}>{s.value}</div>
+                <div className="stat-value" style={{ color: s.color, fontSize: 15 }}>{s.value}</div>
               </div>
               <div style={{
                 width: 40, height: 40, borderRadius: 10,
@@ -302,7 +391,7 @@ if (!peutFaire(profil, 'voirEtatSalaires')) {
         ))}
       </div>
 
-      {/* ── Recap table ── */}
+      {/* ── Tableau état des salaires ── */}
       <div className="card">
         <div className="card-header">
           <h3>
@@ -314,59 +403,112 @@ if (!peutFaire(profil, 'voirEtatSalaires')) {
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table>
+          <table style={{ fontSize: 12 }}>
             <thead>
+              {/* Ligne 1 — groupes */}
               <tr>
-                <th>N°</th>
-                <th>Agent</th>
-                <th>Fonction</th>
-                <th>Salaire base</th>
-                <th>Logement</th>
-                <th>Transport</th>
-                <th>Salaire brut</th>
-                <th>CNSS</th>
-                <th>IUTS</th>
-                <th>Net à payer</th>
+                <th rowSpan={2} style={{ textAlign: 'center', width: 32 }}>N°</th>
+                <th rowSpan={2}>Noms et prénoms</th>
+                <th rowSpan={2}>Fonction</th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Salaire de base</th>
+                <th colSpan={4} style={{ textAlign: 'center', background: '#F5F0E8', borderBottom: '1px solid #E5E5E5' }}>
+                  AVANTAGES
+                </th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Salaire brut</th>
+                <th rowSpan={2} style={{ textAlign: 'center' }}>Jours</th>
+                <th colSpan={2} style={{ textAlign: 'center', background: '#FFF0F0', borderBottom: '1px solid #E5E5E5' }}>
+                  RETENUES
+                </th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Sal. avant déd.</th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Retenue 1%</th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Avance</th>
+                <th rowSpan={2} style={{ textAlign: 'right' }}>Salaire net</th>
+              </tr>
+              {/* Ligne 2 — sous-colonnes */}
+              <tr>
+                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 11 }}>Indem Resp</th>
+                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 11 }}>Indem H.Sup</th>
+                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 11 }}>Indem Logmt</th>
+                <th style={{ textAlign: 'right', background: '#FFFBF5', fontSize: 11 }}>Indem Trsprt</th>
+                <th style={{ textAlign: 'right', background: '#FFF8F8', fontSize: 11 }}>CNSS</th>
+                <th style={{ textAlign: 'right', background: '#FFF8F8', fontSize: 11 }}>IUTS</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="10" style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>Chargement...</td></tr>
+                <tr>
+                  <td colSpan={colSpan} style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>
+                    Chargement...
+                  </td>
+                </tr>
               ) : bulletins.length === 0 ? (
-                <tr><td colSpan="10" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
-                  Aucun bulletin validé pour cette période
-                </td></tr>
+                <tr>
+                  <td colSpan={colSpan} style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                    Aucun bulletin validé pour cette période
+                  </td>
+                </tr>
               ) : (
                 <>
                   {bulletins.map((b, i) => (
                     <tr key={b.id}>
-                      <td style={{ color: '#A3A3A3' }}>{i + 1}</td>
+                      <td style={{ textAlign: 'center', color: '#A3A3A3', fontWeight: 500 }}>{i + 1}</td>
                       <td style={{ fontWeight: 600 }}>{b.agents?.prenom} {b.agents?.nom}</td>
                       <td style={{ color: '#737373' }}>{b.agents?.poste}</td>
-                      <td>{formatFCFA(b.salaire_base)}</td>
-                      <td style={{ color: '#737373' }}>{formatFCFA(b.indemnite_logement)}</td>
-                      <td style={{ color: '#737373' }}>{formatFCFA(b.indemnite_transport)}</td>
-                      <td style={{ fontWeight: 600 }}>{formatFCFA(b.salaire_brut)}</td>
-                      <td style={{ color: '#DC2626' }}>{formatFCFA(b.cnss_salarial)}</td>
-                      <td style={{ color: '#DC2626' }}>{formatFCFA(b.iuts)}</td>
-                      <td style={{ fontWeight: 700, color: '#16A34A' }}>{formatFCFA(b.salaire_net)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(b.salaire_base)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(b.indemnite_fonction)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(b.heures_sup || 0)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(b.indemnite_logement)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(b.indemnite_transport)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(b.salaire_brut)}</td>
+                      <td style={{ textAlign: 'center', color: '#737373', fontSize: 11 }}>
+                        {b.jours_travailles || 'MOIS PLEIN'}
+                      </td>
+                      <td style={{ textAlign: 'right', color: '#A3A3A3' }}>{fmt(b.cnss_salarial)}</td>
+                      <td style={{ textAlign: 'right', color: '#A3A3A3' }}>{fmt(b.iuts)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(b.salaire_net_avant_deduction)}</td>
+                      <td style={{ textAlign: 'right', color: '#737373' }}>{fmt(b.retenue_effort_guerre)}</td>
+                      <td style={{ textAlign: 'right', color: b.avance_salaire > 0 ? '#0F0F0F' : '#A3A3A3' }}>
+                        {b.avance_salaire > 0 ? fmt(b.avance_salaire) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(b.salaire_net)}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#F0F0F0', fontWeight: 700 }}>
-                    <td colSpan="3">TOTAL GÉNÉRAL</td>
-                    <td>{formatFCFA(bulletins.reduce((s, b) => s + (b.salaire_base || 0), 0))}</td>
-                    <td>{formatFCFA(bulletins.reduce((s, b) => s + (b.indemnite_logement || 0), 0))}</td>
-                    <td>{formatFCFA(bulletins.reduce((s, b) => s + (b.indemnite_transport || 0), 0))}</td>
-                    <td>{formatFCFA(totalBrut)}</td>
-                    <td style={{ color: '#DC2626' }}>{formatFCFA(totalCNSS)}</td>
-                    <td style={{ color: '#DC2626' }}>{formatFCFA(totalIUTS)}</td>
-                    <td style={{ color: '#16A34A' }}>{formatFCFA(totalNet)}</td>
+
+                  {/* Ligne total */}
+                  <tr style={{ background: '#F0F0F0', fontWeight: 700, borderTop: '2px solid #D4D4D4' }}>
+                    <td colSpan={3} style={{ fontWeight: 700 }}>TOTAL GÉNÉRAL</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'salaire_base'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'indemnite_fonction'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'heures_sup'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'indemnite_logement'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'indemnite_transport'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(totalBrut)}</td>
+                    <td />
+                    <td style={{ textAlign: 'right' }}>{fmt(totalCNSS)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(totalIUTS)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'salaire_net_avant_deduction'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'retenue_effort_guerre'))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'avance_salaire'))}</td>
+                    <td style={{ textAlign: 'right', color: '#16A34A' }}>{fmt(totalNet)}</td>
                   </tr>
                 </>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Note bas de page */}
+        {bulletins.length > 0 && (
+          <div style={{
+            padding: '12px 20px',
+            borderTop: '1px solid #E5E5E5',
+            fontSize: 12, color: '#737373',
+            fontStyle: 'italic',
+          }}>
+            Arrêté le présent état à la somme de :{' '}
+            <strong style={{ color: '#0F0F0F' }}>{fmt(totalNet)} FCFA</strong>
+          </div>
+        )}
       </div>
     </div>
   );

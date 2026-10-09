@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { age, formatDate, getInitials, avatarColor, joursRestants } from '../lib/helpers';
+import { age, formatDate, joursRestants } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
 import * as XLSX from 'xlsx';
 import {
@@ -630,6 +630,7 @@ function importExcel(file) {
                     title="Tout sélectionner"
                   />
                 </th>
+                <th style={{ width: 36, textAlign: 'center' }}>#</th>
                 <th>Agent</th>
                 <th>Poste</th>
                 <th>Département</th>
@@ -648,8 +649,7 @@ function importExcel(file) {
                     Aucun agent trouvé
                   </td>
                 </tr>
-              ) : filtered.map(a => {
-                const c = avatarColor(a.nom);
+              ) : filtered.map((a, idx) => {
                 const jours = joursRestants(a.date_fin_contrat);
                 const isExpiring = a.type_contrat === 'CDD' && jours !== null && jours <= 30 && jours >= 0;
                 const isSelected = selected.has(a.id);
@@ -663,21 +663,16 @@ function importExcel(file) {
                         style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
                       />
                     </td>
+                    <td style={{ textAlign: 'center', color: '#A3A3A3', fontSize: 12, fontWeight: 500, width: 36 }}>
+                      {idx + 1}
+                    </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: c.bg, color: c.fg, overflow: 'hidden', padding: 0 }}>
-                          {a.photo_url
-                            ? <img src={a.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : getInitials(a.nom, a.prenom)
-                          }
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
+                          {a.prenom} {a.nom}
                         </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#0F0F0F' }}>
-                            {a.prenom} {a.nom}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#A3A3A3' }}>
-                            {a.matricule || '—'}
-                          </div>
+                        <div style={{ fontSize: 11, color: '#A3A3A3' }}>
+                          {a.matricule || '—'}
                         </div>
                       </div>
                     </td>
