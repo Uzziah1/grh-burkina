@@ -1196,7 +1196,7 @@ export default function Paie({ agents, entreprise, profil }) {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="row-actions">
                         <button className="btn btn-secondary btn-sm" onClick={() => setViewModal(b)} title="Voir le bulletin">
                           <Eye size={13} />
                         </button>

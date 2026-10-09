@@ -233,7 +233,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
                     </td>
                     {peutFaire(profil, 'modifierConges') && (
                       <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div className="row-actions">
                           {c.statut === 'En attente' && (
                             <>
                               <button

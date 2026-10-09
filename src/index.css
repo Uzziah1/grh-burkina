@@ -278,6 +278,20 @@ tbody td {
 tbody tr:hover { background: var(--gray-50); }
 tbody tr:last-child td { border-bottom: none; }
 
+/* ── Actions au survol des lignes ── */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+tbody tr:hover .row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ── Badges ── */
 .badge {
   display: inline-flex;

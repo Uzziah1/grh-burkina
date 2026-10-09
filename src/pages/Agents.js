@@ -705,7 +705,7 @@ function importExcel(file) {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="row-actions">
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => onOpenFiche(a.id)}

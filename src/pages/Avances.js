@@ -240,7 +240,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                   </td>
                   {peutFaire(profil, 'modifierAvances') && (
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="row-actions">
                         {a.statut === 'En attente' && (
                           <>
                             <button
