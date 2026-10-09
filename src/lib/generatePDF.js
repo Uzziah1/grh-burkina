@@ -1,11 +1,13 @@
 import { jsPDF } from 'jspdf';
 
-const BLEU = [0, 51, 102];
-const VERT = [0, 135, 90];
-const GRIS = [100, 100, 100];
+// ── Palette neutre (sans couleur de fond dans l'en-tête) ──
+const NOIR  = [15, 15, 15];
+const GRIS  = [100, 100, 100];
+const GRIS_CLAIR = [180, 180, 180];
 
+// ── Chargement d'image (logo) ─────────────────────────────
 async function loadImage(url) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -21,91 +23,109 @@ async function loadImage(url) {
   });
 }
 
+// ── En-tête : logo + nom entreprise (layout FACTURE D'AVANCE) ──
+// Logo à gauche, nom + infos rapides à droite du logo
 async function entete(doc, entreprise) {
-  doc.setFillColor(...BLEU);
-  doc.rect(0, 0, 210, 28, 'F');
+  let logoW = 0;
 
-  // Logo si disponible
   if (entreprise.logo_url) {
     try {
       const imgData = await loadImage(entreprise.logo_url);
       if (imgData) {
-        doc.addImage(imgData, 'PNG', 4, 2, 24, 24);
+        // Logo : max 28 mm de haut, proportions conservées
+        doc.addImage(imgData, 'PNG', 14, 8, 28, 28);
+        logoW = 34; // décalage texte
       }
     } catch (e) {}
   }
 
-  const textX = entreprise.logo_url ? 32 : 14;
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  const textX = 14 + logoW;
+
+  // Nom de l'entreprise — grand, gras, noir
+  doc.setTextColor(...NOIR);
   doc.setFont('helvetica', 'bold');
-  doc.text(entreprise.nom || 'Nom de l\'entreprise', textX, 11);
-  doc.setFontSize(8);
+  doc.setFontSize(16);
+  doc.text(entreprise.nom || 'NOM DE L\'ENTREPRISE', textX, 18);
+
+  // Forme juridique + ville en petit sous le nom
   doc.setFont('helvetica', 'normal');
-  const infos = [
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRIS);
+  const sousTitre = [
     entreprise.forme_juridique,
-    entreprise.siege_social,
-    entreprise.rccm ? `RCCM: ${entreprise.rccm}` : '',
-    entreprise.ifu ? `IFU: ${entreprise.ifu}` : '',
-    entreprise.telephone,
-  ].filter(Boolean).join('  |  ');
-  doc.text(infos, textX, 18);
-  doc.setFontSize(9);
-  doc.text(`Représenté par: ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'}`, textX, 24);
-  doc.setTextColor(0, 0, 0);
+    entreprise.siege_social || entreprise.ville,
+  ].filter(Boolean).join(' — ');
+  if (sousTitre) doc.text(sousTitre, textX, 25);
+
+  // Ligne de séparation sous l'en-tête
+  doc.setDrawColor(...GRIS_CLAIR);
+  doc.setLineWidth(0.5);
+  doc.line(14, 40, 196, 40);
+
+  doc.setTextColor(...NOIR);
 }
 
+// ── Titre principal du document ───────────────────────────
 function titrePrincipal(doc, titre, y) {
-  doc.setFillColor(...BLEU);
-  doc.rect(14, y, 182, 10, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(12);
+  doc.setTextColor(...NOIR);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(titre, 105, y + 7, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  return y + 16;
+  doc.text(titre, 105, y, { align: 'center' });
+  // Trait de soulignement
+  const tw = doc.getTextWidth(titre);
+  const tx = 105 - tw / 2;
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.6);
+  doc.line(tx, y + 1.5, tx + tw, y + 1.5);
+  doc.setFont('helvetica', 'normal');
+  return y + 10;
 }
 
+// ── Titre de section ──────────────────────────────────────
 function sectionTitle(doc, titre, y) {
-  doc.setFillColor(220, 230, 242);
-  doc.rect(14, y, 182, 8, 'F');
-  doc.setTextColor(...BLEU);
-  doc.setFontSize(9);
+  doc.setFillColor(240, 240, 240);
+  doc.rect(14, y, 182, 7, 'F');
+  doc.setDrawColor(...GRIS_CLAIR);
+  doc.rect(14, y, 182, 7, 'S');
+  doc.setTextColor(...NOIR);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
-  doc.text(titre, 17, y + 5.5);
-  doc.setTextColor(0, 0, 0);
-  return y + 12;
+  doc.text(titre, 17, y + 5);
+  doc.setTextColor(...NOIR);
+  return y + 11;
 }
 
+// ── Champ label + valeur + ligne ──────────────────────────
 function champ(doc, label, valeur, x, y, largeur = 85) {
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GRIS);
   doc.text(label + ' :', x, y);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(...NOIR);
   doc.text(valeur || '___________________________', x, y + 5);
-  doc.setDrawColor(180, 180, 180);
+  doc.setDrawColor(...GRIS_CLAIR);
   doc.line(x, y + 6, x + largeur, y + 6);
   return y + 12;
 }
 
+// ── Texte libre avec retour à la ligne ───────────────────
 function texte(doc, txt, x, y, maxWidth = 182) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(...NOIR);
   const lines = doc.splitTextToSize(txt, maxWidth);
   doc.text(lines, x, y);
   return y + lines.length * 5 + 2;
 }
 
+// ── Article numéroté ──────────────────────────────────────
 function article(doc, numero, titre, contenu, y) {
   if (y > 260) { doc.addPage(); y = 20; }
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...VERT);
+  doc.setTextColor(...NOIR);
   doc.text(`Article ${numero} — ${titre}`, 14, y);
-  doc.setTextColor(0, 0, 0);
   y += 6;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
@@ -118,47 +138,85 @@ function article(doc, numero, titre, contenu, y) {
   return y + 4;
 }
 
+// ── Signatures ────────────────────────────────────────────
 function signatures(doc, y, entreprise) {
   if (y > 240) { doc.addPage(); y = 20; }
   y += 10;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NOIR);
   doc.text('L\'EMPLOYEUR', 30, y, { align: 'center' });
   doc.text('L\'EMPLOYÉ(E)', 165, y, { align: 'center' });
   y += 5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(...GRIS);
   doc.text('(Nom, Qualité, Cachet et Signature)', 30, y, { align: 'center' });
   doc.text('(Lu et approuvé)', 165, y, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 30;
-  doc.setDrawColor(0, 0, 0);
+  doc.setTextColor(...NOIR);
+  y += 28;
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.3);
   doc.line(10, y, 70, y);
   doc.line(130, y, 195, y);
   return y;
 }
 
-function piedPage(doc, today) {
+// ── Pied de page : références complètes de l'entreprise ──
+// Layout calqué sur FASO ARMORED : Nom · Adresse · Tél. · RCCM · IFU · Compte
+function piedPage(doc, entreprise) {
   const pageCount = doc.internal.getNumberOfPages();
+
+  // Construction de la ligne de références
+  const refs = [
+    entreprise.siege_social,
+    entreprise.telephone ? `Tél.: ${entreprise.telephone}` : '',
+    entreprise.rccm ? `RCCM : ${entreprise.rccm}` : '',
+    entreprise.ifu ? `IFU : ${entreprise.ifu}` : '',
+    entreprise.numero_compte ? `N° DE COMPTE : ${entreprise.numero_compte}` : '',
+  ].filter(Boolean).join(' · ');
+
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, 285, 196, 285);
-    doc.setFontSize(7);
-    doc.setTextColor(...GRIS);
-    doc.text(`Document généré le ${today} — Confidentiel`, 14, 290);
-    doc.text(`Page ${i} / ${pageCount}`, 196, 290, { align: 'right' });
+
+    // Ligne de séparation
+    doc.setDrawColor(...GRIS_CLAIR);
+    doc.setLineWidth(0.4);
+    doc.line(14, 280, 196, 280);
+
+    // Nom de l'entreprise en gras
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...NOIR);
+    doc.text(entreprise.nom || '', 105, 284, { align: 'center' });
+
+    // Références sur la ligne en dessous
+    if (refs) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...GRIS);
+      doc.text(refs, 105, 288, { align: 'center' });
+    }
+
+    // Numéro de page à droite
+    doc.setFontSize(6.5);
+    doc.text(`${i} / ${pageCount}`, 196, 288, { align: 'right' });
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  DOCUMENTS
+// ═══════════════════════════════════════════════════════════
+
+// ── Attestation de travail ────────────────────────────────
 export async function generateAttestation(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 35;
+  let y = 47;
   y = titrePrincipal(doc, 'ATTESTATION DE TRAVAIL', y);
+  y += 4;
 
   y = sectionTitle(doc, 'INFORMATIONS SUR L\'EMPLOYÉ(E)', y);
   y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 182);
@@ -175,20 +233,23 @@ export async function generateAttestation(agent, entreprise) {
   y = texte(doc, 'Cette attestation lui est délivrée à sa demande pour servir et valoir ce que de droit.', 14, y, 182);
   y += 8;
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
   y += 6;
   signatures(doc, y, entreprise);
-  piedPage(doc, today);
+  piedPage(doc, entreprise);
   doc.save(`attestation_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
+// ── Autorisation de congé ─────────────────────────────────
 export async function generateConge(agent, entreprise, demande = {}) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 35;
+  let y = 47;
   y = titrePrincipal(doc, 'AUTORISATION DE CONGÉ', y);
+  y += 4;
 
   y = sectionTitle(doc, 'INFORMATIONS SUR L\'AGENT', y);
   y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 85);
@@ -198,7 +259,7 @@ export async function generateConge(agent, entreprise, demande = {}) {
 
   y = sectionTitle(doc, 'DÉTAILS DU CONGÉ', y);
   const dateDebut = demande.date_debut ? new Date(demande.date_debut).toLocaleDateString('fr-FR') : '';
-  const dateFin   = demande.date_fin ? new Date(demande.date_fin).toLocaleDateString('fr-FR') : '';
+  const dateFin   = demande.date_fin   ? new Date(demande.date_fin).toLocaleDateString('fr-FR')   : '';
   y = champ(doc, 'Date de début', dateDebut, 14, y, 85);
   y = champ(doc, 'Date de fin', dateFin, 110, y - 12, 85);
   y = champ(doc, 'Nombre de jours ouvrables', demande.nombre_jours ? String(demande.nombre_jours) : '', 14, y, 85);
@@ -213,19 +274,22 @@ export async function generateConge(agent, entreprise, demande = {}) {
 
   y += 6;
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
   signatures(doc, y + 6, entreprise);
-  piedPage(doc, today);
+  piedPage(doc, entreprise);
   doc.save(`conge_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
+// ── Avance sur salaire ────────────────────────────────────
 export async function generateAvance(agent, entreprise, demande = {}) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 35;
+  let y = 47;
   y = titrePrincipal(doc, 'DEMANDE D\'AVANCE SUR SALAIRE', y);
+  y += 4;
 
   y = sectionTitle(doc, 'INFORMATIONS SUR L\'AGENT', y);
   y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 85);
@@ -235,7 +299,7 @@ export async function generateAvance(agent, entreprise, demande = {}) {
   y = champ(doc, 'Salaire brut mensuel', agent.salaire_brut ? parseInt(agent.salaire_brut).toLocaleString('fr-FR') + ' FCFA' : '', 14, y, 182);
 
   y = sectionTitle(doc, 'DÉTAILS DE LA DEMANDE', y);
-  const montant = demande.montant ? parseInt(demande.montant).toLocaleString('fr-FR') + ' FCFA' : '';
+  const montant    = demande.montant ? parseInt(demande.montant).toLocaleString('fr-FR') + ' FCFA' : '';
   const dateDemande = demande.date_demande ? new Date(demande.date_demande).toLocaleDateString('fr-FR') : today;
   y = champ(doc, 'Montant demandé', montant, 14, y, 85);
   y = champ(doc, 'Date de la demande', dateDemande, 110, y - 12, 85);
@@ -243,6 +307,7 @@ export async function generateAvance(agent, entreprise, demande = {}) {
 
   y += 4;
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
   y += 10;
 
@@ -252,26 +317,30 @@ export async function generateAvance(agent, entreprise, demande = {}) {
   doc.text('Avis DRH', 105, y, { align: 'center' });
   doc.text('Décision Direction', 175, y, { align: 'center' });
   y += 25;
-  doc.setDrawColor(0, 0, 0);
+  doc.setDrawColor(...NOIR);
+  doc.setLineWidth(0.3);
   doc.line(10, y, 60, y);
   doc.line(80, y, 130, y);
   doc.line(148, y, 198, y);
 
-  piedPage(doc, today);
+  piedPage(doc, entreprise);
   doc.save(`avance_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
+// ── Contrat CDI ───────────────────────────────────────────
 export async function generateCDI(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 35;
+  let y = 47;
   y = titrePrincipal(doc, 'CONTRAT À DURÉE INDÉTERMINÉE (CDI)', y);
+  y += 4;
 
   y = sectionTitle(doc, 'PARTIES AU CONTRAT', y);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NOIR);
   doc.text('L\'EMPLOYEUR :', 14, y);
   doc.setFont('helvetica', 'normal');
   y += 5;
@@ -343,23 +412,27 @@ export async function generateCDI(agent, entreprise) {
 
   if (y > 230) { doc.addPage(); y = 20; }
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}, en double exemplaire original.`, 14, y);
   signatures(doc, y + 6, entreprise);
-  piedPage(doc, today);
+  piedPage(doc, entreprise);
   doc.save(`contrat_CDI_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
 
-export function generateCDD(agent, entreprise) {
+// ── Contrat CDD ───────────────────────────────────────────
+export async function generateCDD(agent, entreprise) {
   const doc = new jsPDF();
   const today = new Date().toLocaleDateString('fr-FR');
 
-  entete(doc, entreprise);
-  let y = 35;
+  await entete(doc, entreprise);
+  let y = 47;
   y = titrePrincipal(doc, 'CONTRAT À DURÉE DÉTERMINÉE (CDD)', y);
+  y += 4;
 
   y = sectionTitle(doc, 'PARTIES AU CONTRAT', y);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NOIR);
   doc.text('L\'EMPLOYEUR :', 14, y);
   doc.setFont('helvetica', 'normal');
   y += 5;
@@ -428,8 +501,77 @@ export function generateCDD(agent, entreprise) {
 
   if (y > 230) { doc.addPage(); y = 20; }
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}, en double exemplaire original.`, 14, y);
   signatures(doc, y + 6, entreprise);
-  piedPage(doc, today);
+  piedPage(doc, entreprise);
   doc.save(`contrat_CDD_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
+}
+
+// ── Autorisation d'absence ────────────────────────────────
+export async function generateAutorisationAbsence(agent, entreprise, demande = {}) {
+  const doc = new jsPDF();
+  const today = new Date().toLocaleDateString('fr-FR');
+
+  await entete(doc, entreprise);
+  let y = 47;
+  y = titrePrincipal(doc, 'AUTORISATION D\'ABSENCE', y);
+  y += 4;
+
+  y = sectionTitle(doc, 'INFORMATIONS SUR L\'AGENT', y);
+  y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 85);
+  y = champ(doc, 'Matricule', agent.matricule || '', 110, y - 12, 85);
+  y = champ(doc, 'Poste', agent.poste || '', 14, y, 85);
+  y = champ(doc, 'Département', agent.departement || '', 110, y - 12, 85);
+
+  y = sectionTitle(doc, 'DÉTAILS DE L\'ABSENCE', y);
+  y = champ(doc, 'Date', demande.date || '', 14, y, 85);
+  y = champ(doc, 'Durée', demande.duree || '', 110, y - 12, 85);
+  y = champ(doc, 'Motif', demande.motif || '', 14, y, 182);
+
+  y += 4;
+  y = texte(doc, `Nous soussignés, ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'} de la société ${entreprise.nom || '___'}, autorisons par la présente Monsieur / Madame ${agent.prenom} ${agent.nom} à s'absenter pour le motif mentionné ci-dessus.`, 14, y, 182);
+  y += 4;
+  y = texte(doc, 'Cette autorisation est accordée à titre exceptionnel et ne saurait constituer un droit acquis.', 14, y, 182);
+
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
+  signatures(doc, y + 6, entreprise);
+  piedPage(doc, entreprise);
+  doc.save(`autorisation_absence_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
+}
+
+// ── Autorisation (générique) ──────────────────────────────
+export async function generateAutorisation(agent, entreprise, options = {}) {
+  const doc = new jsPDF();
+  const today = new Date().toLocaleDateString('fr-FR');
+
+  await entete(doc, entreprise);
+  let y = 47;
+  y = titrePrincipal(doc, options.titre || 'AUTORISATION', y);
+  y += 4;
+
+  y = sectionTitle(doc, 'BÉNÉFICIAIRE', y);
+  y = champ(doc, 'Nom et Prénom(s)', `${agent.prenom} ${agent.nom}`, 14, y, 85);
+  y = champ(doc, 'Matricule', agent.matricule || '', 110, y - 12, 85);
+  y = champ(doc, 'Poste', agent.poste || '', 14, y, 85);
+  y = champ(doc, 'Département', agent.departement || '', 110, y - 12, 85);
+
+  y = sectionTitle(doc, 'OBJET DE L\'AUTORISATION', y);
+  y = champ(doc, 'Objet', options.objet || '', 14, y, 182);
+  y = champ(doc, 'Période / Date', options.periode || '', 14, y, 182);
+  y = champ(doc, 'Conditions particulières', options.conditions || '', 14, y, 182);
+
+  y += 4;
+  y = texte(doc, `Nous soussignés, ${entreprise.representant || '___'}, ${entreprise.qualite_representant || '___'} de la société ${entreprise.nom || '___'}, accordons par la présente l'autorisation susmentionnée à Monsieur / Madame ${agent.prenom} ${agent.nom}.`, 14, y, 182);
+
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Fait à ${entreprise.ville || 'Ouagadougou'}, le ${today}`, 14, y);
+  signatures(doc, y + 6, entreprise);
+  piedPage(doc, entreprise);
+  doc.save(`autorisation_${agent.prenom}_${agent.nom}_${today.replace(/\//g, '-')}.pdf`);
 }
