@@ -285,7 +285,8 @@ function importExcel(file) {
   reader.onload = async e => {
     const wb   = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
     const ws   = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+    // Skip rows 1-2 (banner + group headers); real headers are on row 3
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false, range: 2 });
 
     console.log('Colonnes détectées:', data.length > 0 ? Object.keys(data[0]) : 'Aucune');
     console.log('Première ligne:', data[0]);
@@ -298,7 +299,8 @@ function importExcel(file) {
       const r = {};
       Object.keys(row).forEach(k => {
         const normalized = k.trim().toLowerCase()
-          .replace(/\s+/g, ' ')          // collapse multiple spaces/newlines
+          .replace(/[\n\r]+/g, ' ')      // newlines → space (e.g. "Date embauche\n(JJ/MM/AAAA)")
+          .replace(/\s+/g, ' ')          // collapse multiple spaces
           .replace(/[éèêë]/g, 'e')
           .replace(/[àâ]/g, 'a')
           .replace(/[îï]/g, 'i')
