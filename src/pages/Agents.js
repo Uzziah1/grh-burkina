@@ -285,10 +285,21 @@ function importExcel(file) {
   reader.onload = async e => {
     const wb   = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
     const ws   = wb.Sheets[wb.SheetNames[0]];
-    // Skip rows 1-2 (banner + group headers); real headers are on row 3
-    const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false, range: 2 });
+    // Read as raw arrays to handle merged cells (row 3 = headers, row 4+ = data)
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+    const headers = rows[2] || []; // row index 2 = Excel row 3
+    const dataRows = rows.slice(3);  // row index 3+ = data
 
-    console.log('Colonnes détectées:', data.length > 0 ? Object.keys(data[0]) : 'Aucune');
+    // Build objects from headers + rows manually
+    const data = dataRows.map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h || `__EMPTY_${i}`] = row[i] ?? '';
+      });
+      return obj;
+    }).filter(r => Object.values(r).some(v => v !== ''));
+
+    console.log('Colonnes détectées:', headers);
     console.log('Première ligne:', data[0]);
 
     let ok = 0;
