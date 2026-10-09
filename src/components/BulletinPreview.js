@@ -4,10 +4,6 @@
 import React from 'react';
 // formatFCFA importé pour compatibilité externe si besoin
 
-const MOIS = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-];
 
 // ── Styles de base ────────────────────────────────────────
 const BASE = {
