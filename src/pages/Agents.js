@@ -832,7 +832,12 @@ function importExcel(file) {
                     const file = e.target.files[0];
                     if (!file) return;
                     const { supabase: sb } = await import('../lib/supabase');
-                    const path = `agents/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    const safeName = file.name
+                      .normalize('NFD').replace(/[̀-ͯ]/g, '') // enlève accents
+                      .replace(/[^a-zA-Z0-9._-]/g, '_')                 // remplace tout caractère spécial
+                      .replace(/_+/g, '_');                              // dédouble les underscores
+                    const path = `agents/${Date.now()}_${safeName}`;
                     const { error } = await sb.storage.from('photos').upload(path, file, { upsert: true });
                     if (error) { alert('Erreur upload photo : ' + error.message); return; }
                     const { data: urlData } = sb.storage.from('photos').getPublicUrl(path);
