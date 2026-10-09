@@ -1156,6 +1156,7 @@ export default function Paie({ agents, entreprise, profil }) {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 36, textAlign: 'center' }}>#</th>
                 <th>Agent</th>
                 <th>Salaire brut</th>
                 <th>CNSS sal.</th>
@@ -1168,33 +1169,28 @@ export default function Paie({ agents, entreprise, profil }) {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>Chargement...</td></tr>
+                <tr><td colSpan="9" style={{ textAlign: 'center', padding: 40, color: '#A3A3A3' }}>Chargement...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan="8" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                <tr><td colSpan="9" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                   Aucun bulletin pour cette période
                 </td></tr>
-              ) : filtered.map(b => {
-                const c = avatarColor(b.agents?.nom || '');
+              ) : filtered.map((b, idx) => {
                 return (
                   <tr key={b.id}>
+                    <td style={{ textAlign: 'center', color: '#A3A3A3', fontSize: 12, fontWeight: 500 }}>{idx + 1}</td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: c.bg, color: c.fg }}>
-                          {getInitials(b.agents?.nom, b.agents?.prenom)}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{b.agents?.prenom} {b.agents?.nom}</div>
-                          <div style={{ fontSize: 11, color: '#A3A3A3' }}>{b.agents?.poste}</div>
-                        </div>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{b.agents?.prenom} {b.agents?.nom}</div>
+                        <div style={{ fontSize: 11, color: '#A3A3A3' }}>{b.agents?.poste}</div>
                       </div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{formatFCFA(b.salaire_brut)}</td>
-                    <td>{formatFCFA(b.cnss_salarial)}</td>
-                    <td>{formatFCFA(b.iuts)}</td>
+                    <td style={{ fontWeight: 600 }}>{(b.salaire_brut || 0).toLocaleString('fr-FR')}</td>
+                    <td>{(b.cnss_salarial || 0).toLocaleString('fr-FR')}</td>
+                    <td>{(b.iuts || 0).toLocaleString('fr-FR')}</td>
                     <td style={{ color: b.avance_salaire > 0 ? '#0F0F0F' : '#A3A3A3' }}>
-                      {b.avance_salaire > 0 ? formatFCFA(b.avance_salaire) : '—'}
+                      {b.avance_salaire > 0 ? (b.avance_salaire).toLocaleString('fr-FR') : '—'}
                     </td>
-                    <td style={{ fontWeight: 700, fontSize: 14 }}>{formatFCFA(b.salaire_net)}</td>
+                    <td style={{ fontWeight: 700, fontSize: 14 }}>{(b.salaire_net || 0).toLocaleString('fr-FR')}</td>
                     <td>
                       <span className={`badge ${b.statut === 'Validé' ? 'badge-green' : 'badge-orange'}`}>
                         {b.statut}
