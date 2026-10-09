@@ -298,12 +298,16 @@ function importExcel(file) {
       const r = {};
       Object.keys(row).forEach(k => {
         const normalized = k.trim().toLowerCase()
+          .replace(/\s+/g, ' ')          // collapse multiple spaces/newlines
           .replace(/[éèêë]/g, 'e')
           .replace(/[àâ]/g, 'a')
-          .replace(/[î]/g, 'i')
-          .replace(/[ô]/g, 'o')
-          .replace(/[û]/g, 'u')
-          .replace(/[ç]/g, 'c');
+          .replace(/[îï]/g, 'i')
+          .replace(/[ôö]/g, 'o')
+          .replace(/[ûü]/g, 'u')
+          .replace(/[ç]/g, 'c')
+          .replace(/\(.*?\)/g, '')       // strip parentheses like (JJ/MM/AAAA) or (FCFA)
+          .replace(/n°/g, 'n')
+          .trim();
         r[normalized] = row[k];
       });
 
@@ -327,9 +331,9 @@ function importExcel(file) {
         departement:      r['departement'] || r['service'] || null,
         categorie_socioprofessionnelle: r['categorie sociopro.'] || r['categorie'] || r['cat'] || null,
         type_contrat:     r['type contrat'] || r['contrat'] || 'CDI',
-        date_embauche:    excelDateToISO(r['date embauche'] || r['embauche']),
+        date_embauche:    excelDateToISO(r['date embauche'] || r['embauche'] || r['date d\'embauche']),
         date_fin_contrat: excelDateToISO(r['date fin contrat'] || r['fin contrat']),
-        salaire_brut:     parseNum(r['salaire de base (fcfa)'] || r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
+        salaire_brut:     parseNum(r['salaire de base'] || r['salaire brut'] || r['salaire']) || null,
         sursalaire:       parseNum(r['sursalaire']),
         indemnite_logement:  parseNum(r['indem. logement'] || r['indemnite logement'] || r['indem logement']),
         indemnite_transport: parseNum(r['indem. transport'] || r['indemnite transport'] || r['indem transport']),
@@ -342,7 +346,10 @@ function importExcel(file) {
         if (agent[k] === '' || agent[k] === 'undefined') agent[k] = null;
       });
 
-      if (agent.nom && agent.poste) {
+      // Skip header/banner rows
+      const nomStr = (agent.nom || '').toUpperCase();
+      const isHeader = !agent.nom || nomStr.includes('TEMPLATE') || nomStr.includes('IDENTITE') || nomStr.includes('NOM');
+      if (agent.nom && !isHeader) {
         const { error } = await supabase.from('agents').insert(agent);
         if (!error) ok++;
         else {
@@ -350,7 +357,7 @@ function importExcel(file) {
           console.error('Erreur insertion:', error.message, agent);
         }
       } else {
-        console.warn('Ligne ignorée (nom ou poste manquant):', row);
+        console.warn('Ligne ignorée (nom manquant):', row);
       }
     }
 
