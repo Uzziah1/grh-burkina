@@ -32,6 +32,7 @@ const EMPTY_FORM = {
   qualite_representant: '', telephone: '', email: '',
   bp: '', ville: 'Ouagadougou', logo_url: '',
   mention_signataire: '', pied_de_page: '',
+  banque: '', numero_compte: '',
 };
 
 // ── Section card component ────────────────────────────────
@@ -312,6 +313,28 @@ export default function Entreprise({ onRefresh }) {
                     value={form.cnss_employeur}
                     onChange={e => setF('cnss_employeur', e.target.value)}
                     placeholder="Ex: 123456"
+                  />
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* Coordonnées bancaires */}
+            <SectionCard title="Coordonnées bancaires" icon={FileText}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Nom de la banque</label>
+                  <input
+                    value={form.banque}
+                    onChange={e => setF('banque', e.target.value)}
+                    placeholder="Ex: Banque Commerciale du Burkina"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>N° de compte</label>
+                  <input
+                    value={form.numero_compte}
+                    onChange={e => setF('numero_compte', e.target.value)}
+                    placeholder="Ex: BF056 01001 050122738701 65/BCB"
                   />
                 </div>
               </div>

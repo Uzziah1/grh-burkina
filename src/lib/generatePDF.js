@@ -155,43 +155,55 @@ function piedPage(doc, entreprise) {
   const ligne3 = [
     entreprise.rccm ? `RCCM : ${entreprise.rccm}` : '',
     entreprise.ifu ? `IFU : ${entreprise.ifu}` : '',
+  ].filter(Boolean).join(' · ');
+
+  const ligne4 = [
+    entreprise.banque ? `Banque : ${entreprise.banque}` : '',
     entreprise.numero_compte ? `N° DE COMPTE : ${entreprise.numero_compte}` : '',
   ].filter(Boolean).join(' · ');
 
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
 
-    // Ligne de séparation
+    // Ligne de séparation — remontée à 270
     doc.setDrawColor(...GRIS_CLAIR);
     doc.setLineWidth(0.4);
-    doc.line(14, 278, 196, 278);
+    doc.line(14, 270, 196, 270);
 
-    // Ligne 1 : Nom entreprise — gras, noir, 10pt
+    // Ligne 1 : Nom entreprise — gras, noir, 11pt
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setTextColor(...NOIR);
-    doc.text(entreprise.nom || '', LEFT, 283);
+    doc.text(entreprise.nom || '', LEFT, 275.5);
 
-    // Ligne 2 : adresse · tél — normal, gris, 7pt
+    // Ligne 2 : adresse · tél — normal, gris, 8pt
     if (ligne2) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       doc.setTextColor(...GRIS);
-      doc.text(ligne2, LEFT, 287.5);
+      doc.text(ligne2, LEFT, 280.5);
     }
 
-    // Ligne 3 : RCCM · IFU · compte — normal, gris, 7pt
+    // Ligne 3 : RCCM · IFU — normal, gris, 8pt
     if (ligne3) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       doc.setTextColor(...GRIS);
-      doc.text(ligne3, LEFT, 292);
+      doc.text(ligne3, LEFT, 285.5);
     }
 
-    // Numéro de page à droite
-    doc.setFontSize(6.5);
+    // Ligne 4 : Banque · N° Compte — normal, gris, 8pt
+    if (ligne4) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...GRIS);
+      doc.text(ligne4, LEFT, 290.5);
+    }
+
+    // Numéro de page à droite (aligné sur la dernière ligne)
+    doc.setFontSize(7);
     doc.setTextColor(...GRIS);
-    doc.text(`${i} / ${pageCount}`, 196, 292, { align: 'right' });
+    doc.text(`${i} / ${pageCount}`, 196, 290.5, { align: 'right' });
   }
 }
 
