@@ -23,43 +23,39 @@ async function loadImage(url) {
   });
 }
 
-// ── En-tête : logo centré seul (layout FACTURE D'AVANCE) ──
+// ── En-tête : logo centré seul, sans trait ──
 async function entete(doc, entreprise) {
   if (entreprise.logo_url) {
     try {
       const imgData = await loadImage(entreprise.logo_url);
       if (imgData) {
-        // Logo centré horizontalement, 30 mm de haut
         const logoH = 30;
         const logoW = 30;
-        const x = (210 - logoW) / 2; // centré sur A4 (210 mm)
+        const x = (210 - logoW) / 2;
         doc.addImage(imgData, 'PNG', x, 6, logoW, logoH);
       }
     } catch (e) {}
   }
-
-  // Ligne de séparation sous l'en-tête
-  doc.setDrawColor(...GRIS_CLAIR);
-  doc.setLineWidth(0.5);
-  doc.line(14, 40, 196, 40);
-
   doc.setTextColor(...NOIR);
 }
 
-// ── Titre principal du document ───────────────────────────
+// ── Titre principal : cadre fond jaune app, texte blanc ──
+const JAUNE = [232, 146, 10]; // #E8920A
 function titrePrincipal(doc, titre, y) {
-  doc.setTextColor(...NOIR);
-  doc.setFontSize(13);
+  const boxH = 10;
+  const boxW = 182;
+  const boxX = 14;
+  // Fond jaune
+  doc.setFillColor(...JAUNE);
+  doc.rect(boxX, y, boxW, boxH, 'F');
+  // Texte blanc centré
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text(titre, 105, y, { align: 'center' });
-  // Trait de soulignement
-  const tw = doc.getTextWidth(titre);
-  const tx = 105 - tw / 2;
-  doc.setDrawColor(...NOIR);
-  doc.setLineWidth(0.6);
-  doc.line(tx, y + 1.5, tx + tw, y + 1.5);
+  doc.text(titre, 105, y + 6.8, { align: 'center' });
   doc.setFont('helvetica', 'normal');
-  return y + 10;
+  doc.setTextColor(...NOIR);
+  return y + boxH + 6;
 }
 
 // ── Titre de section ──────────────────────────────────────
@@ -143,17 +139,18 @@ function signatures(doc, y, entreprise) {
   return y;
 }
 
-// ── Pied de page : 3 lignes comme le modèle FASO ARMORED ──
-// Ligne 1 : NOM ENTREPRISE (gras, noir)
+// ── Pied de page : 3 lignes alignées à gauche comme le modèle ──
+// Ligne 1 : NOM ENTREPRISE (gras, noir, grand)
 // Ligne 2 : adresse · Tél. (gris)
 // Ligne 3 : RCCM · IFU · N° DE COMPTE (gris)
 function piedPage(doc, entreprise) {
   const pageCount = doc.internal.getNumberOfPages();
+  const LEFT = 14;
 
   const ligne2 = [
     entreprise.siege_social,
     entreprise.telephone ? `Tél.: ${entreprise.telephone}` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' – ');
 
   const ligne3 = [
     entreprise.rccm ? `RCCM : ${entreprise.rccm}` : '',
@@ -169,29 +166,29 @@ function piedPage(doc, entreprise) {
     doc.setLineWidth(0.4);
     doc.line(14, 278, 196, 278);
 
-    // Ligne 1 : Nom entreprise — gras, noir
+    // Ligne 1 : Nom entreprise — gras, noir, 10pt
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(10);
     doc.setTextColor(...NOIR);
-    doc.text(entreprise.nom || '', 105, 283, { align: 'center' });
+    doc.text(entreprise.nom || '', LEFT, 283);
 
-    // Ligne 2 : adresse · tél — normal, gris
+    // Ligne 2 : adresse · tél — normal, gris, 7pt
     if (ligne2) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
+      doc.setFontSize(7);
       doc.setTextColor(...GRIS);
-      doc.text(ligne2, 105, 287.5, { align: 'center' });
+      doc.text(ligne2, LEFT, 287.5);
     }
 
-    // Ligne 3 : RCCM · IFU · compte — normal, gris
+    // Ligne 3 : RCCM · IFU · compte — normal, gris, 7pt
     if (ligne3) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
+      doc.setFontSize(7);
       doc.setTextColor(...GRIS);
-      doc.text(ligne3, 105, 292, { align: 'center' });
+      doc.text(ligne3, LEFT, 292);
     }
 
-    // Numéro de page à droite sur la dernière ligne
+    // Numéro de page à droite
     doc.setFontSize(6.5);
     doc.setTextColor(...GRIS);
     doc.text(`${i} / ${pageCount}`, 196, 292, { align: 'right' });
@@ -208,7 +205,7 @@ export async function generateAttestation(agent, entreprise) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'ATTESTATION DE TRAVAIL', y);
   y += 4;
 
@@ -241,7 +238,7 @@ export async function generateConge(agent, entreprise, demande = {}) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'AUTORISATION DE CONGÉ', y);
   y += 4;
 
@@ -281,7 +278,7 @@ export async function generateAvance(agent, entreprise, demande = {}) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'DEMANDE D\'AVANCE SUR SALAIRE', y);
   y += 4;
 
@@ -327,7 +324,7 @@ export async function generateCDI(agent, entreprise) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'CONTRAT À DURÉE INDÉTERMINÉE (CDI)', y);
   y += 4;
 
@@ -419,7 +416,7 @@ export async function generateCDD(agent, entreprise) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'CONTRAT À DURÉE DÉTERMINÉE (CDD)', y);
   y += 4;
 
@@ -508,7 +505,7 @@ export async function generateAutorisationAbsence(agent, entreprise, demande = {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, 'AUTORISATION D\'ABSENCE', y);
   y += 4;
 
@@ -543,7 +540,7 @@ export async function generateAutorisation(agent, entreprise, options = {}) {
   const today = new Date().toLocaleDateString('fr-FR');
 
   await entete(doc, entreprise);
-  let y = 47;
+  let y = 42;
   y = titrePrincipal(doc, options.titre || 'AUTORISATION', y);
   y += 4;
 
