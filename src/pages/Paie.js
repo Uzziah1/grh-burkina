@@ -389,12 +389,12 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   // ── Emploi / Catégorie / Charges / Ancienneté ──
   drawRow([
     { text: 'Emploi', x1: L, x2: C1 },
-    { text: 'Catégorie', x1: C1, x2: C2 },
+    { text: 'Catégorie socioprofessionnelle', x1: C1, x2: C2 },
     { text: `Charges familiales               Ancienneté`, x1: C2, x2: R, fontSize: 8 },
   ], 5);
   drawRow([
     { text: (agent.poste || '').toUpperCase(), x1: L, x2: C1, bold: true },
-    { text: (agent.categorie || agent.type_contrat || '').toUpperCase(), x1: C1, x2: C2, bold: true },
+    { text: (agent.categorie_socioprofessionnelle || agent.categorie || agent.type_contrat || '').toUpperCase(), x1: C1, x2: C2, bold: true },
     { text: `${bulletin.personnes_a_charge || 0}               ${anciennete}`, x1: C2, x2: R, bold: true, fontSize: 8 },
   ], 5.5);
 
@@ -597,8 +597,9 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
       autres_primes:        0,
       heures_sup:           0,
       autres_retenues:      0,
-      avance_salaire:       0,
-      charges_familiales:   agent.charges_familiales || 0,
+      avance_salaire:                 0,
+      charges_familiales:             agent.charges_familiales || 0,
+      categorie_socioprofessionnelle: agent.categorie_socioprofessionnelle || '',
     });
 
     const bulletin = {
@@ -797,8 +798,9 @@ export default function Paie({ agents, entreprise, profil }) {
           autres_primes:          0,
           heures_sup:             0,
           autres_retenues:        0,
-          avance_salaire:         totalAvances,
-          charges_familiales:     agent.charges_familiales || 0,
+          avance_salaire:                 totalAvances,
+          charges_familiales:             agent.charges_familiales || 0,
+          categorie_socioprofessionnelle: agent.categorie_socioprofessionnelle || '',
         });
 
         const bulletinData = {
@@ -1302,7 +1304,7 @@ export default function Paie({ agents, entreprise, profil }) {
                   borderRadius: 8, fontSize: 11, color: '#92400E',
                 }}>
                   Situation : <strong>{selectedAgent.situation_matrimoniale || 'Célibataire'}</strong>
-                  {' '}— {selectedAgent.nombre_enfants || 0} enfant(s) — Charges familiales : <strong>{selectedAgent.charges_familiales || 0}</strong> pers.
+                  {' '}— Charges familiales : <strong>{selectedAgent.charges_familiales || 0}</strong> pers.
                 </div>
               )}
 
