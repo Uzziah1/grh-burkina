@@ -264,187 +264,309 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
 // One A4 page per agent; each page is a complete bulletin.
 // The function draws each bulletin onto the doc then adds a page break.
 function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
-  const today = new Date().toLocaleDateString('fr-FR');
-  const NOIR = [26, 26, 26];
-  const GRIS = [115, 115, 115];
-  const GRIS_CLAIR = [240, 240, 240];
-  let y = 14;
+  // ── Format identique au modèle Excel FASO ARMORED ──
+  const NOIR  = [26, 26, 26];
+  const GRIS  = [115, 115, 115];
+  const ROUGE_CLAIR = [245, 198, 198]; // titre rose/rouge clair comme Excel
 
-  if (entreprise?.logo_url) {
-    try { doc.addImage(entreprise.logo_url, 'PNG', 14, y - 2, 18, 18); } catch (e) {}
-  } else {
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineDashPattern([1, 1], 0);
-    doc.rect(14, y - 2, 18, 18);
-    doc.setLineDashPattern([], 0);
-    doc.setFontSize(6);
-    doc.setTextColor(...GRIS);
-    doc.text('LOGO', 23, y + 7, { align: 'center' });
+  // Colonnes : L=14, col1=14..90, col2=90..150, col3=150..196
+  const L = 14, R = 196;
+  const C1 = 90, C2 = 150; // séparateurs colonnes
+  const W = R - L; // 182
+
+  let y = 12;
+
+  // Helpers PDF tableau ──────────────────────────────────
+  // Dessine une ligne de tableau 3 colonnes (ou 2 avec colspan)
+  // cells = [{ text, x1, x2, bold, italic, align, bg, fontSize }]
+  const drawRow = (cells, rowH = 6) => {
+    cells.forEach(cell => {
+      const x1 = cell.x1;
+      const x2 = cell.x2;
+      // fond
+      if (cell.bg) {
+        doc.setFillColor(...cell.bg);
+        doc.rect(x1, y, x2 - x1, rowH, 'F');
+      }
+      // bordure
+      doc.setDrawColor(153, 153, 153);
+      doc.setLineWidth(0.3);
+      doc.rect(x1, y, x2 - x1, rowH);
+      // texte
+      if (!cell.text && cell.text !== 0) return;
+      doc.setFont('helvetica', cell.bold ? 'bold' : cell.italic ? 'italic' : 'normal');
+      doc.setFontSize(cell.fontSize || 9);
+      doc.setTextColor(...(cell.color || NOIR));
+      const align = cell.align || 'left';
+      const tx = align === 'right' ? x2 - 2 : align === 'center' ? (x1 + x2) / 2 : x1 + 2;
+      doc.text(String(cell.text), tx, y + rowH * 0.68, { align });
+    });
+    y += rowH;
+  };
+
+  const fmtN = (v) => {
+    const n = parseFloat(v);
+    if (!n || n === 0) return '';
+    return Math.round(n).toLocaleString('fr-FR');
+  };
+
+  const nomComplet = `${(agent.prenom || '').toUpperCase()} ${(agent.nom || '').toUpperCase()}`.trim();
+  const dateEmb = agent.date_embauche
+    ? new Date(agent.date_embauche).toLocaleDateString('fr-FR') : '—';
+
+  // Ancienneté
+  let anciennete = '-';
+  if (agent.date_embauche) {
+    const emb = new Date(agent.date_embauche);
+    const ref = new Date(annee, mois - 1, 1);
+    const moisAnc = (ref.getFullYear() - emb.getFullYear()) * 12 + (ref.getMonth() - emb.getMonth());
+    if (moisAnc >= 12) { const ans = Math.floor(moisAnc / 12); anciennete = `${ans} an${ans > 1 ? 's' : ''}`; }
+    else if (moisAnc > 0) anciennete = `${moisAnc} mois`;
   }
-  const tx = 36;
-  doc.setTextColor(...NOIR);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.text(entreprise?.nom || 'Entreprise', tx, y + 3);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRIS);
-  doc.text([
-    entreprise?.siege_social || '',
-    entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
-    entreprise?.cnss_employeur ? `CNSS: ${entreprise.cnss_employeur}` : '',
-  ].filter(Boolean).join('  |  '), tx, y + 9);
-  doc.setTextColor(...GRIS);
-  doc.setFontSize(8);
-  doc.text('Bulletin édité le', 196, y, { align: 'right' });
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...NOIR);
-  doc.text(today, 196, y + 5, { align: 'right' });
-  y += 22;
-  doc.setDrawColor(...NOIR);
-  doc.setLineWidth(0.6);
-  doc.line(14, y, 196, y);
+
+  // Période
+  const lastDay = new Date(annee, mois, 0).getDate();
+  const dateDebut = `01/${String(mois).padStart(2, '0')}/${annee}`;
+  const dateFin = `${lastDay}/${String(mois).padStart(2, '0')}/${annee}`;
+
+  // Exo plafonds
+  const imposable = bulletin.salaire_brut_imposable || 0;
+  const exoLogPlafond = fmtN(Math.min(imposable * 0.20, 75000));
+  const exoTraPlafond = fmtN(Math.min(imposable * 0.05, 30000));
+  const exoFonPlafond = fmtN(Math.min(imposable * 0.05, 50000));
+
+  // ── Titre ──────────────────────────────────────────────
+  drawRow([{
+    text: `BULLETIN DE PAIE DE ${nomComplet}`,
+    x1: L, x2: R, bold: true, fontSize: 10, align: 'center', bg: ROUGE_CLAIR,
+  }], 7);
+
+  // ── Période ──
+  drawRow([
+    { text: 'Période du :', x1: L, x2: C1, bold: false },
+    { text: `${dateDebut} AU ${dateFin}`, x1: C1, x2: R, colspan: true },
+  ], 5.5);
+
+  // ── En-têtes colonnes ──
+  drawRow([
+    { text: 'Employeur :', x1: L, x2: C1, bold: true },
+    { text: 'Organisme social', x1: C1, x2: C2, bold: true, align: 'center' },
+    { text: 'Employé', x1: C2, x2: R, bold: true, align: 'center' },
+  ], 5.5);
+
+  // ── Infos employeur/CNSS/employé (bloc multi-lignes) ──
+  const infoH = 26;
+  // Fond blanc, bordures
+  doc.setDrawColor(153, 153, 153); doc.setLineWidth(0.3);
+  doc.rect(L, y, C1 - L, infoH);
+  doc.rect(C1, y, C2 - C1, infoH);
+  doc.rect(C2, y, R - C2, infoH);
+
+  // Employeur
+  let iy = y + 4;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
+  doc.text(entreprise?.nom || 'FASO ARMORED', L + 2, iy);
+  iy += 4.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
+  if (entreprise?.telephone) { doc.text(`Tél: ${entreprise.telephone}`, L + 2, iy); iy += 3.5; }
+  if (entreprise?.rccm) { doc.text(`RCCM: ${entreprise.rccm}`, L + 2, iy); iy += 3.5; }
+  if (entreprise?.ifu) { doc.text(`IFU: ${entreprise.ifu}`, L + 2, iy); iy += 3.5; }
+  doc.setTextColor(...NOIR); doc.text("Date d'embauche", L + 2, iy); iy += 3.5;
+  doc.text(dateEmb, L + 2, iy);
+
+  // CNSS
+  doc.setTextColor(...NOIR); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+  doc.text('Caisse Nationale de', C1 + 2, y + 5);
+  doc.text('Sécurité Sociale', C1 + 2, y + 9);
+  doc.text('(CNSS)', C1 + 2, y + 13);
+  if (entreprise?.cnss_employeur) doc.text(`N° : ${entreprise.cnss_employeur}`, C1 + 2, y + 18);
+
+  // Employé
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
+  doc.text(nomComplet, C2 + 2, y + 5);
+  if (agent.cnss) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(`CNSS : ${agent.cnss}`, C2 + 2, y + 10); }
+
+  y += infoH;
+
+  // ── Emploi / Catégorie / Charges / Ancienneté ──
+  drawRow([
+    { text: 'Emploi', x1: L, x2: C1 },
+    { text: 'Catégorie', x1: C1, x2: C2 },
+    { text: `Charges familiales               Ancienneté`, x1: C2, x2: R, fontSize: 8 },
+  ], 5);
+  drawRow([
+    { text: (agent.poste || '').toUpperCase(), x1: L, x2: C1, bold: true },
+    { text: (agent.categorie || agent.type_contrat || '').toUpperCase(), x1: C1, x2: C2, bold: true },
+    { text: `${bulletin.personnes_a_charge || 0}               ${anciennete}`, x1: C2, x2: R, bold: true, fontSize: 8 },
+  ], 5.5);
+
+  // ── Salaire de base ──
+  drawRow([
+    { text: 'Salaire de base', x1: L, x2: C1, bold: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.salaire_base), x1: C2, x2: R, bold: true, align: 'right' },
+  ], 5.5);
+
+  // ── Indemnités header ──
+  drawRow([
+    { text: 'Indemnités', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: '', x1: C2, x2: R },
+  ], 4.5);
+
+  const indRow = (label, val, greenBg = false) => drawRow([
+    { text: label, x1: L + 3, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(val), x1: C2, x2: R, align: 'right', bg: greenBg && val > 0 ? [240, 244, 236] : undefined },
+  ], 5);
+
+  indRow('- logement',  bulletin.indemnite_logement,  true);
+  indRow('- transport', bulletin.indemnite_transport,  false);
+  indRow('- fonction',  bulletin.indemnite_fonction,   true);
+  const autreVal = (parseFloat(bulletin.sursalaire) || 0) + (parseFloat(bulletin.prime_anciennete) || 0)
+    + (parseFloat(bulletin.autres_primes) || 0) + (parseFloat(bulletin.heures_sup) || 0);
+  indRow('- autre', autreVal, false);
+
+  // ── Salaire brut ──
+  drawRow([
+    { text: 'Salaire brut', x1: L, x2: C1, bold: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.salaire_brut), x1: C2, x2: R, bold: true, align: 'right' },
+  ], 5.5);
+
+  // ── CNSS (italic) ──
+  drawRow([
+    { text: 'CNSS', x1: L, x2: C1, italic: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.cnss_salarial), x1: C2, x2: R, italic: true, align: 'right' },
+  ], 5);
+
+  // ── Salaire imposable ──
+  const salImposable = (bulletin.salaire_brut || 0) - (bulletin.cnss_salarial || 0);
+  drawRow([
+    { text: 'Salaire imposable', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(salImposable), x1: C2, x2: R, align: 'right' },
+  ], 5);
+
+  // ── Contrôle CNSS fiscal (italic) ──
+  drawRow([
+    { text: 'Contrôle CNSS (fiscal)', x1: L, x2: C1, italic: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.controle_cnss_fiscal), x1: C2, x2: R, italic: true, align: 'right' },
+  ], 5);
+
+  // ── Salaire imposable IUTS (bold) ──
+  drawRow([
+    { text: 'Salaire imposable IUTS', x1: L, x2: C1, bold: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.salaire_brut_imposable), x1: C2, x2: R, bold: true, align: 'right' },
+  ], 5.5);
+
+  // ── Contrôle des indemnités header ──
+  drawRow([
+    { text: 'Contrôle des indemnités', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: '', x1: C2, x2: R },
+  ], 4.5);
+
+  const exoRow = (label, plafond, retenu) => drawRow([
+    { text: label, x1: L + 3, x2: C1 },
+    { text: plafond, x1: C1, x2: C2, align: 'right' },
+    { text: retenu, x1: C2, x2: R, align: 'right' },
+  ], 5);
+
+  exoRow('- logement',  exoLogPlafond, fmtN(bulletin.exo_logement));
+  exoRow('- transport', exoTraPlafond, fmtN(bulletin.exo_transport));
+  exoRow('- fonction',  exoFonPlafond, fmtN(bulletin.exo_fonction));
+
+  // ── Total exonérations (italic) ──
+  drawRow([
+    { text: 'Total exonérations', x1: L, x2: C1, italic: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.total_exonerations), x1: C2, x2: R, italic: true, align: 'right' },
+  ], 5);
+
+  // ── Abattement forfaitaire (italic) ──
+  drawRow([
+    { text: 'Abattement forf.', x1: L, x2: C1, italic: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.abattement_forfaitaire), x1: C2, x2: R, italic: true, align: 'right' },
+  ], 5);
+
+  // ── Base IUTS ──
+  drawRow([
+    { text: 'Base IUTS', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.base_iuts), x1: C2, x2: R, align: 'right' },
+  ], 5.5);
+
+  // ── IUTS brut (italic) ──
+  drawRow([
+    { text: 'IUTS', x1: L, x2: C1, italic: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.iuts_brut), x1: C2, x2: R, italic: true, align: 'right' },
+  ], 5);
+
+  // ── Personnes à charge ──
+  drawRow([
+    { text: 'Personnes à charge', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.personnes_a_charge), x1: C2, x2: R, align: 'right' },
+  ], 5);
+
+  // ── Abattement familial ──
+  drawRow([
+    { text: 'Abattement', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.abattement_familial), x1: C2, x2: R, align: 'right' },
+  ], 5);
+
+  // ── Net IUTS (italic bold) ──
+  drawRow([
+    { text: 'Net IUTS', x1: L, x2: C1, italic: true, bold: true },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.iuts), x1: C2, x2: R, italic: true, bold: true, align: 'right' },
+  ], 5.5);
+
+  // ── Retenues ──
+  drawRow([
+    { text: 'Retenues acomptes', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: '', x1: C2, x2: R },
+  ], 5);
+  drawRow([
+    { text: 'Retenues prêts', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: '', x1: C2, x2: R },
+  ], 5);
+  const autresRetTotal = (parseFloat(bulletin.autres_retenues) || 0) + (parseFloat(bulletin.avance_salaire) || 0);
+  drawRow([
+    { text: 'Autres retenues', x1: L, x2: C1 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(autresRetTotal), x1: C2, x2: R, align: 'right' },
+  ], 5);
+
+  // ── Salaire net (bold, plus grand) ──
+  drawRow([
+    { text: 'Salaire net', x1: L, x2: C1, bold: true, fontSize: 10 },
+    { text: '', x1: C1, x2: C2 },
+    { text: fmtN(bulletin.salaire_net), x1: C2, x2: R, bold: true, fontSize: 10, align: 'right' },
+  ], 7);
+
   y += 6;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(`BULLETIN DE PAIE — ${MOIS[mois - 1].toUpperCase()} ${annee}`, 105, y + 3, { align: 'center' });
-  y += 8;
-  doc.setLineWidth(0.6);
-  doc.line(14, y, 196, y);
-  y += 6;
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('EMPLOYEUR', 17, y + 2);
-  doc.text('EMPLOYÉ(E)', 107, y + 2);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(entreprise?.nom || '—', 17, y + 8);
-  doc.text(`${agent.prenom} ${agent.nom}`, 107, y + 8);
-  doc.setFontSize(8);
-  doc.setTextColor(...GRIS);
-  doc.text(`Représenté par : ${entreprise?.representant || '—'}`, 17, y + 13);
-  doc.text(`${agent.poste || '—'}${agent.departement ? ' — ' + agent.departement : ''}`, 107, y + 13);
-  doc.text(`${entreprise?.qualite_representant || ''}`, 17, y + 18);
-  doc.text(`Matricule : ${agent.matricule || '—'} | CNSS : ${agent.cnss || '—'}`, 107, y + 18);
-  doc.setTextColor(...NOIR);
-  y += 24;
-  doc.setLineWidth(0.6);
-  doc.line(14, y, 196, y);
-  y += 2;
-
-  const band = (label) => {
-    doc.setFillColor(...NOIR);
-    doc.rect(14, y, 182, 6.5, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text(label.toUpperCase(), 17, y + 4.5);
-    doc.setTextColor(...NOIR);
-    y += 8.5;
-  };
-  const row = (label, val, opts = {}) => {
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.2);
-    doc.line(14, y + 5, 196, y + 5);
-    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(opts.muted ? 130 : NOIR[0], opts.muted ? 130 : NOIR[1], opts.muted ? 130 : NOIR[2]);
-    doc.text((opts.indent ? '   ' : '') + label, 17, y + 3.5);
-    doc.text(Math.round(val).toLocaleString('fr-FR'), 193, y + 3.5, { align: 'right' });
-    doc.setTextColor(...NOIR);
-    y += 6.2;
-  };
-  const totalRow = (label, val, big = false) => {
-    const h = big ? 9 : 7.5;
-    doc.setFillColor(...GRIS_CLAIR);
-    doc.rect(14, y, 182, h, 'F');
-    doc.setDrawColor(...NOIR);
-    doc.setLineWidth(0.5);
-    doc.line(14, y, 196, y);
-    doc.line(14, y + h, 196, y + h);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(big ? 12 : 10);
-    doc.text(label, 17, y + (big ? 6.3 : 5.2));
-    doc.text(Math.round(val).toLocaleString('fr-FR') + ' FCFA', 193, y + (big ? 6.3 : 5.2), { align: 'right' });
-    y += h + 3;
-  };
-
-  band('Éléments de rémunération');
-  const earnings = [
-    { label: 'Salaire de base',        val: bulletin.salaire_base },
-    { label: 'Sursalaire',             val: bulletin.sursalaire },
-    { label: 'Indemnité de logement',  val: bulletin.indemnite_logement },
-    { label: 'Indemnité de transport', val: bulletin.indemnite_transport },
-    { label: 'Indemnité de fonction',  val: bulletin.indemnite_fonction },
-    { label: 'Prime d\'ancienneté',    val: bulletin.prime_anciennete },
-    { label: 'Autres primes',          val: bulletin.autres_primes },
-    { label: 'Heures supplémentaires', val: bulletin.heures_sup },
-  ];
-  earnings.filter(e => e.val > 0).forEach(e => row(e.label, e.val));
-  totalRow('SALAIRE BRUT', bulletin.salaire_brut);
-  y += 2;
-
-  band('Base imposable IUTS');
-  row('Salaire imposable (brut - contrôle CNSS)', bulletin.salaire_brut_imposable, { muted: true });
-  row('Exonération logement', -bulletin.exo_logement, { indent: true, muted: true });
-  row('Exonération transport', -bulletin.exo_transport, { indent: true, muted: true });
-  row('Exonération fonction', -bulletin.exo_fonction, { indent: true, muted: true });
-  row('Abattement forfaitaire (25%)', -bulletin.abattement_forfaitaire, { indent: true, muted: true });
-  totalRow('BASE IUTS', bulletin.base_iuts);
-  y += 2;
-
-  band('Retenues');
-  row('CNSS salarié (5.5%, plafond 44 000)', bulletin.cnss_salarial);
-  row('IUTS brut', bulletin.iuts_brut);
-  row(`Abattement charges familiales (${bulletin.personnes_a_charge} pers.)`, -bulletin.abattement_familial, { indent: true, muted: true });
-  row('Net IUTS', bulletin.iuts);
-  totalRow('TOTAL RETENUES', bulletin.total_retenues);
-  y += 2;
-
-  band('Net à payer');
-  if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
-  if (bulletin.avance_salaire > 0)  row('Avance sur salaire', bulletin.avance_salaire);
-  totalRow('NET À PAYER', bulletin.salaire_net, true);
-
-  doc.setFontSize(8);
-  doc.setTextColor(...GRIS);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Charge patronale CNSS (16%) : ${Math.round(bulletin.cnss_patronal).toLocaleString('fr-FR')} FCFA`, 17, y + 4);
-  doc.setTextColor(...NOIR);
-  y += 14;
-
-  if (y > 245) { doc.addPage(); y = 20; }
-  doc.setDrawColor(...NOIR);
-  doc.setLineWidth(0.5);
-  doc.line(14, y, 196, y);
-  y += 8;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text(entreprise?.qualite_representant || 'L\'EMPLOYEUR', 40, y, { align: 'center' });
-  doc.text('L\'EMPLOYÉ(E)', 170, y, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...GRIS);
-  doc.text(entreprise?.mention_signataire || 'Cachet et signature', 40, y + 5, { align: 'center' });
-  doc.text('Lu et approuvé', 170, y + 5, { align: 'center' });
-  doc.setTextColor(...NOIR);
-  y += 22;
-  doc.setDrawColor(...NOIR);
-  doc.line(14, y, 70, y);
-  doc.line(130, y, 195, y);
-  doc.setFontSize(8);
-  doc.text(entreprise?.representant || '', 42, y + 4, { align: 'center' });
-  doc.text(`${agent.prenom} ${agent.nom}`, 162, y + 4, { align: 'center' });
-  y += 12;
-  doc.setFontSize(7);
-  doc.setTextColor(...GRIS);
-  if (entreprise?.pied_de_page) {
-    doc.text(entreprise.pied_de_page, 105, y, { align: 'center' });
-    y += 5;
-  }
-  doc.text(`Bulletin généré le ${today} — Document confidentiel`, 105, y, { align: 'center' });
+  // ── Signatures ──────────────────────────────────────────
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
+  doc.text('Le Responsable RH', 50, y, { align: 'center' });
+  doc.text("L'employé", 160, y, { align: 'center' });
+  y += 16;
+  doc.setDrawColor(...NOIR); doc.setLineWidth(0.4);
+  doc.line(14, y, 86, y);
+  doc.line(130, y, 196, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text(entreprise?.representant || '', 50, y + 4, { align: 'center' });
+  doc.text(nomComplet, 163, y + 4, { align: 'center' });
 }
 
 async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress) {

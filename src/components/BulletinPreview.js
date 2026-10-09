@@ -1,5 +1,5 @@
-// BulletinPreview.js - Visual A4 payroll bulletin preview
-// Clean black & white table layout, print-friendly
+// BulletinPreview.js - Bulletin de paie format Excel FASO ARMORED
+// Layout identique au modèle Excel fourni
 
 import React from 'react';
 import { formatFCFA } from '../lib/calcPaie';
@@ -9,88 +9,43 @@ const MOIS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
-// ── Table row ────────────────────────────────────────────
-function Row({ label, value, bold, muted, indent }) {
-  return (
-    <tr>
-      <td style={{
-        padding: '5px 12px',
-        paddingLeft: indent ? 28 : 12,
-        fontSize: 11.5,
-        color: '#1A1A1A',
-        fontWeight: bold ? 700 : 400,
-        borderBottom: '1px solid #DDDDDD',
-        opacity: muted ? 0.65 : 1,
-      }}>
-        {label}
-      </td>
-      <td style={{
-        padding: '5px 12px',
-        fontSize: 11.5,
-        color: '#1A1A1A',
-        fontWeight: bold ? 700 : 500,
-        textAlign: 'right',
-        borderBottom: '1px solid #DDDDDD',
-        opacity: muted ? 0.65 : 1,
-        whiteSpace: 'nowrap',
-      }}>
-        {formatFCFA(value)}
-      </td>
-    </tr>
-  );
+// ── Styles de base ────────────────────────────────────────
+const BASE = {
+  fontFamily: "'Arial', sans-serif",
+  fontSize: 11,
+  color: '#1A1A1A',
+};
+
+const CELL = {
+  border: '1px solid #999',
+  padding: '3px 6px',
+  fontSize: 11,
+  verticalAlign: 'middle',
+};
+
+const CELL_BOLD = { ...CELL, fontWeight: 700 };
+const CELL_ITALIC = { ...CELL, fontStyle: 'italic' };
+const CELL_RIGHT = { ...CELL, textAlign: 'right' };
+const CELL_RIGHT_BOLD = { ...CELL, textAlign: 'right', fontWeight: 700 };
+const CELL_RIGHT_ITALIC = { ...CELL, textAlign: 'right', fontStyle: 'italic' };
+
+// Cellule sans bordure gauche/droite pour les lignes de regroupement
+const CELL_INNER = { ...CELL, borderLeft: 'none', borderRight: 'none' };
+
+function fmt(v) {
+  if (v === null || v === undefined || v === 0 || v === '0' || v === '') return '';
+  const n = parseFloat(v);
+  if (isNaN(n) || n === 0) return '';
+  return Math.round(n).toLocaleString('fr-FR');
 }
 
-// ── Section band header ─────────────────────────────────
-function Band({ label }) {
-  return (
-    <tr>
-      <td colSpan={2} style={{
-        padding: '6px 12px',
-        background: '#1A1A1A',
-        fontSize: 10.5, fontWeight: 700, color: '#fff',
-        textTransform: 'uppercase', letterSpacing: '0.5px',
-      }}>
-        {label}
-      </td>
-    </tr>
-  );
+function fmtNeg(v) {
+  const n = parseFloat(v);
+  if (!n || n === 0) return '';
+  return Math.round(n).toLocaleString('fr-FR');
 }
 
-// ── Total row ────────────────────────────────────────────
-function TotalRow({ label, value, big }) {
-  return (
-    <tr>
-      <td style={{
-        padding: big ? '10px 12px' : '8px 12px',
-        background: '#F0F0F0',
-        fontSize: big ? 14 : 12.5,
-        fontWeight: 800, color: '#0F0F0F',
-        borderTop: '2px solid #1A1A1A',
-        borderBottom: '2px solid #1A1A1A',
-      }}>
-        {label}
-      </td>
-      <td style={{
-        padding: big ? '10px 12px' : '8px 12px',
-        background: '#F0F0F0',
-        fontSize: big ? 14 : 12.5,
-        fontWeight: 800, color: '#0F0F0F',
-        textAlign: 'right',
-        borderTop: '2px solid #1A1A1A',
-        borderBottom: '2px solid #1A1A1A',
-        whiteSpace: 'nowrap',
-      }}>
-        {formatFCFA(value)}
-      </td>
-    </tr>
-  );
-}
-
-// ── Main bulletin preview component ────────────────────────
 export default function BulletinPreview({ form, preview, agent, entreprise }) {
-  const today = new Date().toLocaleDateString('fr-FR');
-  const periode = `${MOIS[(form.mois || 1) - 1]} ${form.annee || ''}`;
-
   if (!agent) {
     return (
       <div style={{
@@ -104,216 +59,327 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
     );
   }
 
-  const earnings = [
-    { l: 'Salaire de base',        v: form.salaire_base },
-    { l: 'Sursalaire',             v: form.sursalaire },
-    { l: 'Indemnité de logement',  v: form.indemnite_logement },
-    { l: 'Indemnité de transport', v: form.indemnite_transport },
-    { l: 'Indemnité de fonction',  v: form.indemnite_fonction },
-    { l: 'Prime d\'ancienneté',    v: form.prime_anciennete },
-    { l: 'Autres primes',          v: form.autres_primes },
-    { l: 'Heures supplémentaires', v: form.heures_sup },
-  ].filter(r => parseFloat(r.v) > 0);
+  const moisIdx = (form.mois || 1) - 1;
+  const moisLabel = MOIS[moisIdx];
+  const annee = form.annee || '';
+
+  // Calcul date début/fin du mois
+  const dateDebut = `01/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
+  const lastDay = new Date(annee, form.mois || 1, 0).getDate();
+  const dateFin = `${lastDay}/${String(form.mois || 1).padStart(2, '0')}/${annee}`;
+
+  const nomComplet = `${(agent.prenom || '').toUpperCase()} ${(agent.nom || '').toUpperCase()}`.trim();
+
+  // Date d'embauche
+  const dateEmb = agent.date_embauche
+    ? new Date(agent.date_embauche).toLocaleDateString('fr-FR')
+    : '—';
+
+  // Calcul ancienneté
+  let anciennete = '-';
+  if (agent.date_embauche) {
+    const emb = new Date(agent.date_embauche);
+    const ref = new Date(annee, moisIdx, 1);
+    const moisAnc = (ref.getFullYear() - emb.getFullYear()) * 12 + (ref.getMonth() - emb.getMonth());
+    if (moisAnc >= 12) {
+      const ans = Math.floor(moisAnc / 12);
+      anciennete = `${ans} an${ans > 1 ? 's' : ''}`;
+    } else if (moisAnc > 0) {
+      anciennete = `${moisAnc} mois`;
+    }
+  }
+
+  const p = preview || {};
+
+  // Exonérations : plafond calculable vs retenu réel
+  const exoLogementPlafond = p.exo_logement != null ? fmt(Math.min(
+    (p.salaire_brut_imposable || 0) * 0.20, 75000
+  )) : '';
+  const exoTransportPlafond = p.exo_transport != null ? fmt(Math.min(
+    (p.salaire_brut_imposable || 0) * 0.05, 30000
+  )) : '';
+  const exoFonctionPlafond = p.exo_fonction != null ? fmt(Math.min(
+    (p.salaire_brut_imposable || 0) * 0.05, 50000
+  )) : '';
 
   return (
     <div
       id="bulletin-printable"
       style={{
+        ...BASE,
         width: '100%',
         background: '#fff',
-        border: '1px solid #1A1A1A',
-        fontFamily: "'Poppins', sans-serif",
-        color: '#1A1A1A',
+        padding: '20px 24px',
+        boxSizing: 'border-box',
       }}
     >
-
-      {/* ── Header: logo + company ── */}
-      <div style={{
-        borderBottom: '2px solid #1A1A1A',
-        padding: '16px 24px',
-        display: 'flex', alignItems: 'center', gap: 16,
-      }}>
-        {entreprise?.logo_url ? (
-          <img
-            src={entreprise.logo_url}
-            alt="Logo"
-            style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }}
-          />
-        ) : (
-          <div style={{
-            width: 56, height: 56,
-            border: '1px dashed #D4D4D4',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, color: '#A3A3A3', fontSize: 9,
-          }}>
-            LOGO
-          </div>
-        )}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 16 }}>
-            {entreprise?.nom || 'Nom de l\'entreprise'}
-          </div>
-          <div style={{ fontSize: 10.5, color: '#525252', marginTop: 2 }}>
-            {[
-              entreprise?.siege_social,
-              entreprise?.rccm ? `RCCM: ${entreprise.rccm}` : '',
-              entreprise?.cnss_employeur ? `CNSS Employeur: ${entreprise.cnss_employeur}` : '',
-            ].filter(Boolean).join('  |  ')}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right', fontSize: 10.5, color: '#525252' }}>
-          <div>Bulletin édité le</div>
-          <div style={{ fontWeight: 700 }}>{today}</div>
-        </div>
-      </div>
-
-      {/* ── Title bar ── */}
-      <div style={{
-        borderBottom: '2px solid #1A1A1A',
-        padding: '10px 24px',
-        textAlign: 'center',
-      }}>
-        <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '0.5px' }}>
-          BULLETIN DE PAIE — {periode.toUpperCase()}
-        </div>
-      </div>
-
-      {/* ── Employer / Employee info ── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr',
-        borderBottom: '2px solid #1A1A1A',
-      }}>
-        <div style={{ padding: '14px 24px', borderRight: '1px solid #D4D4D4' }}>
-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#737373', textTransform: 'uppercase', marginBottom: 6 }}>
-            Employeur
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 700 }}>{entreprise?.nom || '—'}</div>
-          <div style={{ fontSize: 11, color: '#525252', marginTop: 2 }}>
-            Représenté par : {entreprise?.representant || '—'}
-          </div>
-          <div style={{ fontSize: 11, color: '#525252' }}>
-            {entreprise?.qualite_representant || ''}
-          </div>
-        </div>
-        <div style={{ padding: '14px 24px' }}>
-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#737373', textTransform: 'uppercase', marginBottom: 6 }}>
-            Employé(e)
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 700 }}>
-            {agent.prenom} {agent.nom}
-          </div>
-          <div style={{ fontSize: 11, color: '#525252', marginTop: 2 }}>
-            {agent.poste || '—'} {agent.departement ? `— ${agent.departement}` : ''}
-          </div>
-          <div style={{ fontSize: 11, color: '#525252' }}>
-            Matricule : {agent.matricule || '—'} | CNSS : {agent.cnss || '—'}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Main table ── */}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '35%' }} />
+          <col style={{ width: '35%' }} />
+          <col style={{ width: '30%' }} />
+        </colgroup>
         <tbody>
 
-          {/* Earnings */}
-          <Band label="Éléments de rémunération" />
-          {earnings.length === 0 ? (
-            <tr>
-              <td colSpan={2} style={{ padding: '12px 24px', fontSize: 11, color: '#A3A3A3', fontStyle: 'italic' }}>
-                Aucun élément saisi
-              </td>
-            </tr>
-          ) : earnings.map(e => <Row key={e.l} label={e.l} value={e.v} />)}
-          <TotalRow label="SALAIRE BRUT" value={preview?.salaire_brut} />
-
-          {/* Tax base detail */}
-          {preview && (
-            <>
-              <Band label="Base imposable IUTS" />
-              <Row label="Salaire imposable (brut − contrôle CNSS)" value={preview.salaire_brut_imposable} muted />
-              <Row label="Exonération logement"  value={-preview.exo_logement} muted indent />
-              <Row label="Exonération transport" value={-preview.exo_transport} muted indent />
-              <Row label="Exonération fonction"  value={-preview.exo_fonction} muted indent />
-              <Row label="Abattement forfaitaire (25% base)" value={-preview.abattement_forfaitaire} muted />
-              <TotalRow label="Base IUTS (arrondie)" value={preview.base_iuts} />
-            </>
-          )}
-
-          {/* Deductions */}
-          <Band label="Retenues" />
-          <Row label="CNSS salarié (5.5%, plafond 44 000 FCFA)" value={preview?.cnss_salarial} />
-          <Row label="IUTS brut (barème progressif)" value={preview?.iuts_brut} muted />
-          <Row label={`Abattement charges familiales (${preview?.personnes_a_charge || 0} pers.)`} value={-(preview?.abattement_familial || 0)} muted indent />
-          <Row label="IUTS net à retenir" value={preview?.iuts} bold />
-          <TotalRow label="TOTAL RETENUES" value={preview?.total_retenues} />
-
-          {/* Other deductions */}
-          {preview && (parseFloat(form.autres_retenues) > 0 || parseFloat(form.avance_salaire) > 0) && (
-            <>
-              <Band label="Autres déductions" />
-              {parseFloat(form.autres_retenues) > 0 && <Row label="Autres retenues" value={form.autres_retenues} />}
-              {parseFloat(form.avance_salaire) > 0 && <Row label="Avance sur salaire" value={form.avance_salaire} />}
-            </>
-          )}
-
-          {/* Net salary */}
-          <TotalRow label="NET À PAYER" value={preview?.salaire_net} big />
-
-          {/* Employer charge note */}
+          {/* ── Titre ── */}
           <tr>
-            <td colSpan={2} style={{ padding: '8px 12px', fontSize: 10.5, color: '#737373' }}>
-              Charge patronale CNSS (16%) : <strong>{formatFCFA(preview?.cnss_patronal)}</strong>
+            <td colSpan={3} style={{
+              ...CELL,
+              textAlign: 'center',
+              fontWeight: 700,
+              fontSize: 12,
+              background: '#F5C6C6',
+              padding: '5px 8px',
+            }}>
+              BULLETIN DE PAIE DE {nomComplet}
             </td>
           </tr>
+
+          {/* ── Période ── */}
+          <tr>
+            <td style={{ ...CELL, borderRight: 'none' }}>Période du :</td>
+            <td colSpan={2} style={{ ...CELL, borderLeft: 'none' }}>
+              {dateDebut} AU {dateFin}
+            </td>
+          </tr>
+
+          {/* ── En-têtes colonnes ── */}
+          <tr>
+            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employeur :</td>
+            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Organisme social</td>
+            <td style={{ ...CELL_BOLD, textAlign: 'center' }}>Employé</td>
+          </tr>
+
+          {/* ── Infos employeur / CNSS / employé ── */}
+          <tr>
+            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 700 }}>{entreprise?.nom || 'FASO ARMORED'}</div>
+              {entreprise?.telephone && <div>Tél: {entreprise.telephone}</div>}
+              {entreprise?.rccm && <div>RCCM: {entreprise.rccm}</div>}
+              {entreprise?.ifu && <div>IFU: {entreprise.ifu}</div>}
+              <div style={{ marginTop: 4 }}>Date d'embauche</div>
+              <div>{dateEmb}</div>
+            </td>
+            <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
+              <div>Caisse Nationale de Sécurité Sociale (CNSS)</div>
+              {entreprise?.cnss_employeur && <div>N° : {entreprise.cnss_employeur}</div>}
+            </td>
+            <td style={{ ...CELL, verticalAlign: 'top', fontWeight: 700 }}>
+              {nomComplet}
+              {agent.cnss && <div style={{ fontWeight: 400, marginTop: 4 }}>CNSS : {agent.cnss}</div>}
+            </td>
+          </tr>
+
+          {/* ── Emploi / Catégorie / Charges / Ancienneté ── */}
+          <tr>
+            <td style={CELL}>Emploi</td>
+            <td style={CELL}>Catégorie</td>
+            <td style={CELL}>Charges familiales &nbsp;&nbsp;&nbsp; Ancienneté</td>
+          </tr>
+          <tr>
+            <td style={CELL_BOLD}>{(agent.poste || '').toUpperCase()}</td>
+            <td style={CELL_BOLD}>{(agent.categorie || agent.type_contrat || '').toUpperCase()}</td>
+            <td style={CELL_BOLD}>
+              {p.personnes_a_charge || 0}
+              <span style={{ float: 'right', fontWeight: 400 }}>{anciennete}</span>
+            </td>
+          </tr>
+
+          {/* ── Salaire de base ── */}
+          <tr>
+            <td style={CELL_BOLD}>Salaire de base</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_BOLD}>{fmt(form.salaire_base)}</td>
+          </tr>
+
+          {/* ── Indemnités ── */}
+          <tr>
+            <td style={{ ...CELL, borderBottom: 'none' }}>Indemnités</td>
+            <td style={CELL}></td>
+            <td style={CELL}></td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
+            <td style={CELL}></td>
+            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_logement) > 0 ? '#F0F4EC' : undefined }}>
+              {fmt(form.indemnite_logement)}
+            </td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>{fmt(form.indemnite_transport)}</td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- fonction</td>
+            <td style={CELL}></td>
+            <td style={{ ...CELL, textAlign: 'right', background: parseFloat(form.indemnite_fonction) > 0 ? '#F0F4EC' : undefined }}>
+              {fmt(form.indemnite_fonction)}
+            </td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- autre</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>
+              {fmt((parseFloat(form.sursalaire) || 0) + (parseFloat(form.prime_anciennete) || 0) + (parseFloat(form.autres_primes) || 0) + (parseFloat(form.heures_sup) || 0))}
+            </td>
+          </tr>
+
+          {/* ── Salaire brut ── */}
+          <tr>
+            <td style={CELL_BOLD}>Salaire brut</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut)}</td>
+          </tr>
+
+          {/* ── CNSS ── */}
+          <tr>
+            <td style={CELL_ITALIC}>CNSS</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.cnss_salarial)}</td>
+          </tr>
+
+          {/* ── Salaire imposable ── */}
+          <tr>
+            <td style={CELL}>Salaire imposable</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>{fmt(p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0)}</td>
+          </tr>
+
+          {/* ── Contrôle CNSS fiscal ── */}
+          <tr>
+            <td style={CELL_ITALIC}>Contrôle CNSS (fiscal)</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.controle_cnss_fiscal)}</td>
+          </tr>
+
+          {/* ── Salaire imposable IUTS ── */}
+          <tr>
+            <td style={CELL_BOLD}>Salaire imposable IUTS</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_BOLD}>{fmt(p.salaire_brut_imposable)}</td>
+          </tr>
+
+          {/* ── Contrôle des indemnités ── */}
+          <tr>
+            <td style={{ ...CELL, borderBottom: 'none' }}>Contrôle des indemnités</td>
+            <td style={CELL}></td>
+            <td style={CELL}></td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- logement</td>
+            <td style={{ ...CELL, textAlign: 'right' }}>{exoLogementPlafond}</td>
+            <td style={CELL_RIGHT}>{fmt(p.exo_logement)}</td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', borderBottom: 'none', paddingLeft: 18 }}>- transport</td>
+            <td style={{ ...CELL, textAlign: 'right' }}>{exoTransportPlafond}</td>
+            <td style={CELL_RIGHT}>{fmt(p.exo_transport)}</td>
+          </tr>
+          <tr>
+            <td style={{ ...CELL, borderTop: 'none', paddingLeft: 18 }}>- fonction</td>
+            <td style={{ ...CELL, textAlign: 'right' }}>{exoFonctionPlafond}</td>
+            <td style={CELL_RIGHT}>{fmt(p.exo_fonction)}</td>
+          </tr>
+
+          {/* ── Total exonérations ── */}
+          <tr>
+            <td style={CELL_ITALIC}>Total exonérations</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.total_exonerations)}</td>
+          </tr>
+
+          {/* ── Abattement forfaitaire ── */}
+          <tr>
+            <td style={CELL_ITALIC}>Abattement forf.</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.abattement_forfaitaire)}</td>
+          </tr>
+
+          {/* ── Base IUTS ── */}
+          <tr>
+            <td style={CELL}>Base IUTS</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>{fmt(p.base_iuts)}</td>
+          </tr>
+
+          {/* ── IUTS ── */}
+          <tr>
+            <td style={CELL_ITALIC}>IUTS</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts_brut)}</td>
+          </tr>
+
+          {/* ── Personnes à charge ── */}
+          <tr>
+            <td style={CELL}>Personnes à charge</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>{fmt(p.personnes_a_charge)}</td>
+          </tr>
+
+          {/* ── Abattement familial ── */}
+          <tr>
+            <td style={CELL}>Abattement</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>{fmt(p.abattement_familial)}</td>
+          </tr>
+
+          {/* ── Net IUTS ── */}
+          <tr>
+            <td style={CELL_ITALIC}>Net IUTS</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT_ITALIC}>{fmt(p.iuts)}</td>
+          </tr>
+
+          {/* ── Retenues ── */}
+          <tr>
+            <td style={CELL}>Retenues acomptes</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}></td>
+          </tr>
+          <tr>
+            <td style={CELL}>Retenues prêts</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}></td>
+          </tr>
+          <tr>
+            <td style={CELL}>Autres retenues</td>
+            <td style={CELL}></td>
+            <td style={CELL_RIGHT}>
+              {(() => {
+                const ar = parseFloat(form.autres_retenues) || 0;
+                const av = parseFloat(form.avance_salaire) || 0;
+                return fmt(ar + av);
+              })()}
+            </td>
+          </tr>
+
+          {/* ── Salaire net ── */}
+          <tr>
+            <td style={{ ...CELL_BOLD, fontSize: 12 }}>Salaire net</td>
+            <td style={CELL}></td>
+            <td style={{ ...CELL_RIGHT_BOLD, fontSize: 12 }}>{fmt(p.salaire_net)}</td>
+          </tr>
+
         </tbody>
       </table>
 
       {/* ── Signatures ── */}
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr',
-        gap: 20, padding: '24px 24px 16px',
-        borderTop: '2px solid #1A1A1A',
+        marginTop: 24, gap: 20,
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-            {entreprise?.qualite_representant || 'L\'EMPLOYEUR'}
-          </div>
-          {entreprise?.mention_signataire && (
-            <div style={{ fontSize: 9, color: '#A3A3A3', fontStyle: 'italic', marginBottom: 14 }}>
-              {entreprise.mention_signataire}
-            </div>
-          )}
-          {!entreprise?.mention_signataire && <div style={{ marginBottom: 26 }} />}
-          <div style={{ borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 10, fontWeight: 600 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 11 }}>Le Responsable RH</div>
+          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
             {entreprise?.representant || '—'}
           </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-            L'EMPLOYÉ(E)
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700, fontSize: 11 }}>L'employé</div>
+          <div style={{ marginTop: 32, borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 11 }}>
+            {nomComplet}
           </div>
-          <div style={{ fontSize: 9, color: '#A3A3A3', fontStyle: 'italic', marginBottom: 14 }}>
-            Lu et approuvé
-          </div>
-          <div style={{ borderTop: '1px solid #1A1A1A', paddingTop: 4, fontSize: 10, fontWeight: 600 }}>
-            {agent.prenom} {agent.nom}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div style={{
-        borderTop: '1px solid #D4D4D4',
-        padding: '10px 24px',
-        textAlign: 'center',
-      }}>
-        {entreprise?.pied_de_page && (
-          <div style={{ fontSize: 10, color: '#737373', fontStyle: 'italic', marginBottom: 4 }}>
-            {entreprise.pied_de_page}
-          </div>
-        )}
-        <div style={{ fontSize: 9, color: '#A3A3A3' }}>
-          Document confidentiel — Généré le {today}
         </div>
       </div>
     </div>
