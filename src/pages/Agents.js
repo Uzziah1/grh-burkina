@@ -832,7 +832,6 @@ function importExcel(file) {
                     const file = e.target.files[0];
                     if (!file) return;
                     const { supabase: sb } = await import('../lib/supabase');
-                    const ext = file.name.split('.').pop().toLowerCase();
                     const safeName = file.name
                       .normalize('NFD').replace(/[̀-ͯ]/g, '') // enlève accents
                       .replace(/[^a-zA-Z0-9._-]/g, '_')                 // remplace tout caractère spécial
