@@ -803,7 +803,7 @@ function importExcel(file) {
                 flexShrink: 0,
               }}>
                 {form.photo_url
-                  ? <img src={form.photo_url} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={form.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : <span style={{ fontSize: 28, color: '#A3A3A3' }}>👤</span>
                 }
               </div>
