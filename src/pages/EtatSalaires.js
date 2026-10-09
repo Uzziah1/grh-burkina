@@ -55,7 +55,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
   const head = [[
     'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
     'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
-    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
+    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
   ]];
 
   const body = bulletins.map((b, i) => [
@@ -71,7 +71,6 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
   formatNombrePDF(b.cnss_salarial),
   formatNombrePDF(b.iuts),
   formatNombrePDF(b.salaire_net_avant_deduction),
-  formatNombrePDF(b.retenue_effort_guerre),
   formatNombrePDF(b.salaire_net),
 ]);
 
@@ -88,7 +87,6 @@ const totalRow = [
   formatNombrePDF(sum('cnss_salarial')),
   formatNombrePDF(sum('iuts')),
   formatNombrePDF(sum('salaire_net_avant_deduction')),
-  formatNombrePDF(sum('retenue_effort_guerre')),
   formatNombrePDF(sum('salaire_net')),
 ];
 
@@ -112,8 +110,7 @@ const totalRow = [
     9: { halign: 'right' },
     10: { halign: 'right' },
     11: { halign: 'right' },
-    12: { halign: 'right' },
-    13: { halign: 'right', fontStyle: 'bold' },
+    12: { halign: 'right', fontStyle: 'bold' },
   },
   didParseCell: (data) => {
     if (data.row.index === body.length) {
@@ -155,7 +152,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     [
       'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
       'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
-      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
+      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
     ],
   ];
 
@@ -173,7 +170,6 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
       b.cnss_salarial || 0,
       b.iuts || 0,
       b.salaire_net_avant_deduction || 0,
-      b.retenue_effort_guerre || 0,
       b.salaire_net || 0,
     ]);
   });
@@ -184,7 +180,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     sum('salaire_base'), sum('indemnite_fonction'), sum('heures_sup'),
     sum('indemnite_logement'), sum('indemnite_transport'), sum('salaire_brut'),
     sum('cnss_salarial'), sum('iuts'), sum('salaire_net_avant_deduction'),
-    sum('retenue_effort_guerre'), sum('salaire_net'),
+    sum('salaire_net'),
   ]);
 
   rows.push([]);
@@ -194,7 +190,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
   ws['!cols'] = [
     { wch: 5 }, { wch: 28 }, { wch: 18 }, { wch: 14 },
     { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Etat des salaires');

@@ -13,8 +13,7 @@
 // 9. Abattement charges familiales = % selon nombre de personnes à charge (max 7)
 // 10. Net IUTS = IUTS brut - abattement familial
 // 11. Salaire net avant déduction = brut - CNSS - Net IUTS - autres retenues
-// 12. Retenue 1% (effort de guerre) sur le salaire net avant déduction
-// 13. Salaire net = net avant déduction - retenue 1% - avance sur salaire
+// 12. Salaire net = net avant déduction - avance sur salaire (pas de retenue 1%)
 
 // ── CNSS constants ────────────────────────────────────────
 const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
@@ -33,8 +32,6 @@ const EXO_FONCTION_PLAFOND = 50000;
 // ── Flat-rate allowance (abattement forfaitaire) ──────────
 const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
 
-// ── War effort withholding (retenue 1%) ───────────────────
-const RETENUE_EFFORT_GUERRE = 0.01;
 
 // ── IUTS progressive brackets (monthly taxable base) ──────
 // Replicated exactly from the AZARIA sheet (F3:G11)
@@ -195,13 +192,9 @@ export function calculerBulletin(data) {
     salaire_brut - cnss_salarial - iuts - sAutresRetenues
   );
 
-  // ── Step 12: Retenue 1% effort de guerre (D42) ──
-  const retenue_effort_guerre = Math.round(salaire_net_avant_deduction * RETENUE_EFFORT_GUERRE);
-
-  // ── Step 13: Salaire net final (D44) ──
-  const salaire_net = Math.round(
-    salaire_net_avant_deduction - retenue_effort_guerre - sAvance
-  );
+  // ── Step 12: Salaire net final = net avant déduction - avance (pas de retenue 1%) ──
+  const retenue_effort_guerre = 0; // supprimé — non applicable
+  const salaire_net = Math.round(salaire_net_avant_deduction - sAvance);
 
   // ── Employer contribution ──
   const cnss_patronal = calculerCNSSPatronal(salaire_brut);

@@ -203,11 +203,10 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
   totalRow('TOTAL RETENUES (CNSS + IUTS)', bulletin.total_retenues);
 
   // ── Other deductions ──
-  if (bulletin.autres_retenues > 0 || bulletin.retenue_effort_guerre > 0 || bulletin.avance_salaire > 0) {
+  if (bulletin.autres_retenues > 0 || bulletin.avance_salaire > 0) {
     if (y > 225) { doc.addPage(); y = 20; }
     band('Autres déductions');
     if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
-    if (bulletin.retenue_effort_guerre > 0) row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
     if (bulletin.avance_salaire > 0) row('Avance sur salaire', bulletin.avance_salaire);
     y += 2;
   }
@@ -406,8 +405,7 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
 
   band('Net à payer');
   if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
-  row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
-  if (bulletin.avance_salaire > 0)    row('Avance sur salaire', bulletin.avance_salaire);
+  if (bulletin.avance_salaire > 0)  row('Avance sur salaire', bulletin.avance_salaire);
   totalRow('NET À PAYER', bulletin.salaire_net, true);
 
   doc.setFontSize(8);
@@ -548,7 +546,6 @@ function exportBulletinExcel(form, preview, agent, entreprise) {
     ['TOTAL RETENUES', preview?.total_retenues || 0],
     [],
     ['Autres retenues', parseFloat(form.autres_retenues) || 0],
-    ['Retenue 1% (effort de guerre)', preview?.retenue_effort_guerre || 0],
     ['Avance sur salaire', parseFloat(form.avance_salaire) || 0],
     [],
     ['NET À PAYER', preview?.salaire_net || 0],
