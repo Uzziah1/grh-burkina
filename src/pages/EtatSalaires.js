@@ -298,7 +298,8 @@ export default function EtatSalaires({ entreprise, profil }) {
   const [mois, setMois]           = useState(NOW.getMonth() + 1);
   const [annee, setAnnee]         = useState(NOW.getFullYear());
 
-  useEffect(() => { loadBulletins(); /* eslint-disable-next-line */ }, [mois, annee]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadBulletins(); }, [mois, annee]);
 
   async function loadBulletins() {
     setLoading(true);
