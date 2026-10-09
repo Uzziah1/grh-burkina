@@ -1,0 +1,32 @@
+From 044cb4236353b1e5ea9f041d25599d8ddb9ee312 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 16:06:48 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20supprimer=20constante=20MOIS=20inutilis?=
+ =?UTF-8?q?=C3=A9e=20(lint)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ src/components/BulletinPreview.js | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index 8cf1232..50d9a9b 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -4,10 +4,6 @@
+ import React from 'react';
+ // formatFCFA importé pour compatibilité externe si besoin
+ 
+-const MOIS = [
+-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+-];
+ 
+ // ── Styles de base ────────────────────────────────────────
+ const BASE = {
+-- 
+2.43.0
+

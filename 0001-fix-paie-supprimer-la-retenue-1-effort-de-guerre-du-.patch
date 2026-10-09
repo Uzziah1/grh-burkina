@@ -1,0 +1,193 @@
+From 50cf16371e042eaee128764e7dfd491e25ffd045 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 9 Oct 2026 15:42:25 +0000
+Subject: [PATCH] fix(paie): supprimer la retenue 1% (effort de guerre) du
+ calcul
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- calcPaie.js : retenue_effort_guerre supprimée du calcul, toujours 0
+  Salaire net = salaire net avant déduction - avance (conforme aux bulletins Excel)
+- Paie.js : ligne "Retenue 1%" retirée du PDF et de l'export Excel individuel
+- BulletinPreview.js : ligne retirée de l'aperçu à l'écran
+- EtatSalaires.js : colonne "Retenue 1%" retirée du PDF et Excel récapitulatif
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017HxqhKNkFmFwfrSg5d33kd
+---
+ src/components/BulletinPreview.js |  3 +--
+ src/lib/calcPaie.js               | 15 ++++-----------
+ src/pages/EtatSalaires.js         | 14 +++++---------
+ src/pages/Paie.js                 |  7 ++-----
+ 4 files changed, 12 insertions(+), 27 deletions(-)
+
+diff --git a/src/components/BulletinPreview.js b/src/components/BulletinPreview.js
+index f588086..b2881f0 100644
+--- a/src/components/BulletinPreview.js
++++ b/src/components/BulletinPreview.js
+@@ -248,11 +248,10 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
+           <TotalRow label="TOTAL RETENUES" value={preview?.total_retenues} />
+ 
+           {/* Other deductions */}
+-          {preview && (parseFloat(form.autres_retenues) > 0 || preview.retenue_effort_guerre > 0 || parseFloat(form.avance_salaire) > 0) && (
++          {preview && (parseFloat(form.autres_retenues) > 0 || parseFloat(form.avance_salaire) > 0) && (
+             <>
+               <Band label="Autres déductions" />
+               {parseFloat(form.autres_retenues) > 0 && <Row label="Autres retenues" value={form.autres_retenues} />}
+-              <Row label="Retenue 1% (effort de guerre)" value={preview.retenue_effort_guerre} />
+               {parseFloat(form.avance_salaire) > 0 && <Row label="Avance sur salaire" value={form.avance_salaire} />}
+             </>
+           )}
+diff --git a/src/lib/calcPaie.js b/src/lib/calcPaie.js
+index 710f550..f1cfb6d 100644
+--- a/src/lib/calcPaie.js
++++ b/src/lib/calcPaie.js
+@@ -13,8 +13,7 @@
+ // 9. Abattement charges familiales = % selon nombre de personnes à charge (max 7)
+ // 10. Net IUTS = IUTS brut - abattement familial
+ // 11. Salaire net avant déduction = brut - CNSS - Net IUTS - autres retenues
+-// 12. Retenue 1% (effort de guerre) sur le salaire net avant déduction
+-// 13. Salaire net = net avant déduction - retenue 1% - avance sur salaire
++// 12. Salaire net = net avant déduction - avance sur salaire (pas de retenue 1%)
+ 
+ // ── CNSS constants ────────────────────────────────────────
+ const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
+@@ -33,8 +32,6 @@ const EXO_FONCTION_PLAFOND = 50000;
+ // ── Flat-rate allowance (abattement forfaitaire) ──────────
+ const ABATTEMENT_FORFAITAIRE_TAUX = 0.25; // 25% of base salary
+ 
+-// ── War effort withholding (retenue 1%) ───────────────────
+-const RETENUE_EFFORT_GUERRE = 0.01;
+ 
+ // ── IUTS progressive brackets (monthly taxable base) ──────
+ // Replicated exactly from the AZARIA sheet (F3:G11)
+@@ -195,13 +192,9 @@ export function calculerBulletin(data) {
+     salaire_brut - cnss_salarial - iuts - sAutresRetenues
+   );
+ 
+-  // ── Step 12: Retenue 1% effort de guerre (D42) ──
+-  const retenue_effort_guerre = Math.round(salaire_net_avant_deduction * RETENUE_EFFORT_GUERRE);
+-
+-  // ── Step 13: Salaire net final (D44) ──
+-  const salaire_net = Math.round(
+-    salaire_net_avant_deduction - retenue_effort_guerre - sAvance
+-  );
++  // ── Step 12: Salaire net final = net avant déduction - avance (pas de retenue 1%) ──
++  const retenue_effort_guerre = 0; // supprimé — non applicable
++  const salaire_net = Math.round(salaire_net_avant_deduction - sAvance);
+ 
+   // ── Employer contribution ──
+   const cnss_patronal = calculerCNSSPatronal(salaire_brut);
+diff --git a/src/pages/EtatSalaires.js b/src/pages/EtatSalaires.js
+index a1e43ab..4e75426 100644
+--- a/src/pages/EtatSalaires.js
++++ b/src/pages/EtatSalaires.js
+@@ -55,7 +55,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
+   const head = [[
+     'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
+     'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
+-    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
++    'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
+   ]];
+ 
+   const body = bulletins.map((b, i) => [
+@@ -71,7 +71,6 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
+   formatNombrePDF(b.cnss_salarial),
+   formatNombrePDF(b.iuts),
+   formatNombrePDF(b.salaire_net_avant_deduction),
+-  formatNombrePDF(b.retenue_effort_guerre),
+   formatNombrePDF(b.salaire_net),
+ ]);
+ 
+@@ -88,7 +87,6 @@ const totalRow = [
+   formatNombrePDF(sum('cnss_salarial')),
+   formatNombrePDF(sum('iuts')),
+   formatNombrePDF(sum('salaire_net_avant_deduction')),
+-  formatNombrePDF(sum('retenue_effort_guerre')),
+   formatNombrePDF(sum('salaire_net')),
+ ];
+ 
+@@ -112,8 +110,7 @@ const totalRow = [
+     9: { halign: 'right' },
+     10: { halign: 'right' },
+     11: { halign: 'right' },
+-    12: { halign: 'right' },
+-    13: { halign: 'right', fontStyle: 'bold' },
++    12: { halign: 'right', fontStyle: 'bold' },
+   },
+   didParseCell: (data) => {
+     if (data.row.index === body.length) {
+@@ -155,7 +152,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+     [
+       'N°', 'Noms et prénoms', 'Fonction', 'Salaire de base',
+       'Indem. Resp.', 'Indem. H.Sup', 'Indem. Logmt', 'Indem. Transp.',
+-      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Retenue 1%', 'Salaire net',
++      'Salaire brut', 'CNSS', 'IUTS', 'Av. déduction', 'Salaire net',
+     ],
+   ];
+ 
+@@ -173,7 +170,6 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+       b.cnss_salarial || 0,
+       b.iuts || 0,
+       b.salaire_net_avant_deduction || 0,
+-      b.retenue_effort_guerre || 0,
+       b.salaire_net || 0,
+     ]);
+   });
+@@ -184,7 +180,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+     sum('salaire_base'), sum('indemnite_fonction'), sum('heures_sup'),
+     sum('indemnite_logement'), sum('indemnite_transport'), sum('salaire_brut'),
+     sum('cnss_salarial'), sum('iuts'), sum('salaire_net_avant_deduction'),
+-    sum('retenue_effort_guerre'), sum('salaire_net'),
++    sum('salaire_net'),
+   ]);
+ 
+   rows.push([]);
+@@ -194,7 +190,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
+   ws['!cols'] = [
+     { wch: 5 }, { wch: 28 }, { wch: 18 }, { wch: 14 },
+     { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+-    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
++    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+   ];
+   const wb = XLSX.utils.book_new();
+   XLSX.utils.book_append_sheet(wb, ws, 'Etat des salaires');
+diff --git a/src/pages/Paie.js b/src/pages/Paie.js
+index b1a19fa..b176bfd 100644
+--- a/src/pages/Paie.js
++++ b/src/pages/Paie.js
+@@ -203,11 +203,10 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
+   totalRow('TOTAL RETENUES (CNSS + IUTS)', bulletin.total_retenues);
+ 
+   // ── Other deductions ──
+-  if (bulletin.autres_retenues > 0 || bulletin.retenue_effort_guerre > 0 || bulletin.avance_salaire > 0) {
++  if (bulletin.autres_retenues > 0 || bulletin.avance_salaire > 0) {
+     if (y > 225) { doc.addPage(); y = 20; }
+     band('Autres déductions');
+     if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+-    if (bulletin.retenue_effort_guerre > 0) row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+     if (bulletin.avance_salaire > 0) row('Avance sur salaire', bulletin.avance_salaire);
+     y += 2;
+   }
+@@ -406,8 +405,7 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
+ 
+   band('Net à payer');
+   if (bulletin.autres_retenues > 0) row('Autres retenues', bulletin.autres_retenues);
+-  row('Retenue 1% (effort de guerre)', bulletin.retenue_effort_guerre);
+-  if (bulletin.avance_salaire > 0)    row('Avance sur salaire', bulletin.avance_salaire);
++  if (bulletin.avance_salaire > 0)  row('Avance sur salaire', bulletin.avance_salaire);
+   totalRow('NET À PAYER', bulletin.salaire_net, true);
+ 
+   doc.setFontSize(8);
+@@ -548,7 +546,6 @@ function exportBulletinExcel(form, preview, agent, entreprise) {
+     ['TOTAL RETENUES', preview?.total_retenues || 0],
+     [],
+     ['Autres retenues', parseFloat(form.autres_retenues) || 0],
+-    ['Retenue 1% (effort de guerre)', preview?.retenue_effort_guerre || 0],
+     ['Avance sur salaire', parseFloat(form.avance_salaire) || 0],
+     [],
+     ['NET À PAYER', preview?.salaire_net || 0],
+-- 
+2.43.0
+
