@@ -6,7 +6,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { getInitials, avatarColor } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
 import {
   calculerBulletin, formatFCFA,
