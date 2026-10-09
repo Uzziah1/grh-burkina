@@ -101,6 +101,9 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     fmtPDF(b.salaire_net),
   ]);
 
+  const totalBrutPDF = sum(bulletins, 'salaire_brut');
+  const tpa = Math.round(totalBrutPDF * 0.03);
+
   const totRow = [
     { content: '', styles: { fontStyle: 'bold' } },
     { content: 'TOTAL GÉNÉRAL', styles: { fontStyle: 'bold' } },
@@ -110,7 +113,7 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     fmtPDF(sum(bulletins, 'heures_sup')),
     fmtPDF(sum(bulletins, 'indemnite_logement')),
     fmtPDF(sum(bulletins, 'indemnite_transport')),
-    fmtPDF(sum(bulletins, 'salaire_brut')),
+    fmtPDF(totalBrutPDF),
     '',
     fmtPDF(sum(bulletins, 'cnss_salarial')),
     fmtPDF(sum(bulletins, 'iuts')),
@@ -120,9 +123,20 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     fmtPDF(sum(bulletins, 'salaire_net')),
   ];
 
+  const tpaRow = [
+    { content: '', styles: { fontStyle: 'italic' } },
+    {
+      content: 'Taxe Patronale d\'Apprentissage (3% masse brute)',
+      colSpan: 7,
+      styles: { fontStyle: 'italic', textColor: [80, 80, 80] },
+    },
+    { content: fmtPDF(tpa), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: '', colSpan: 7 },
+  ];
+
   autoTable(doc, {
     head,
-    body: [...body, totRow],
+    body: [...body, totRow, tpaRow],
     startY: 25,
     theme: 'grid',
     styles: {
@@ -155,8 +169,14 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
     },
     didParseCell: (data) => {
       if (data.row.index === body.length) {
+        // Ligne TOTAL GÉNÉRAL
         data.cell.styles.fillColor = [230, 230, 230];
         data.cell.styles.fontStyle = 'bold';
+      }
+      if (data.row.index === body.length + 1) {
+        // Ligne TPA
+        data.cell.styles.fillColor = [245, 245, 245];
+        data.cell.styles.fontStyle = 'italic';
       }
     },
   });
@@ -241,6 +261,8 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
   });
 
   // Ligne total
+  const totalBrutXLS = Math.round(sum(bulletins, 'salaire_brut'));
+  const tpaXLS = Math.round(totalBrutXLS * 0.03);
   rows.push([
     '', 'TOTAL GÉNÉRAL', '',
     Math.round(sum(bulletins, 'salaire_base')),
@@ -248,7 +270,7 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     Math.round(sum(bulletins, 'heures_sup')),
     Math.round(sum(bulletins, 'indemnite_logement')),
     Math.round(sum(bulletins, 'indemnite_transport')),
-    Math.round(sum(bulletins, 'salaire_brut')),
+    totalBrutXLS,
     '',
     Math.round(sum(bulletins, 'cnss_salarial')),
     Math.round(sum(bulletins, 'iuts')),
@@ -256,6 +278,12 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     Math.round(sum(bulletins, 'retenue_effort_guerre')),
     Math.round(sum(bulletins, 'avance_salaire')),
     Math.round(sum(bulletins, 'salaire_net')),
+  ]);
+
+  // Ligne Taxe Patronale d'Apprentissage
+  rows.push([
+    '', 'Taxe Patronale d\'Apprentissage (3% masse brute)', '', '', '', '', '', '',
+    tpaXLS, '', '', '', '', '', '', '',
   ]);
 
   rows.push([]);
@@ -321,6 +349,7 @@ export default function EtatSalaires({ entreprise, profil }) {
   const totalNet  = sum(bulletins, 'salaire_net');
   const totalCNSS = sum(bulletins, 'cnss_salarial');
   const totalIUTS = sum(bulletins, 'iuts');
+  const totalTPA  = Math.round(totalBrut * 0.03);
 
   if (!peutFaire(profil, 'voirEtatSalaires')) {
     return (
@@ -491,6 +520,18 @@ export default function EtatSalaires({ entreprise, profil }) {
                     <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'retenue_effort_guerre'))}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(sum(bulletins, 'avance_salaire'))}</td>
                     <td style={{ textAlign: 'right', color: '#16A34A' }}>{fmt(totalNet)}</td>
+                  </tr>
+
+                  {/* Ligne Taxe Patronale d'Apprentissage */}
+                  <tr style={{ background: '#FFF8EC', fontStyle: 'italic', borderTop: '1px solid #E5E5E5' }}>
+                    <td />
+                    <td colSpan={7} style={{ color: '#735C00', fontSize: 11 }}>
+                      Taxe Patronale d'Apprentissage (3% de la masse brute)
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#735C00' }}>
+                      {fmt(totalTPA)}
+                    </td>
+                    <td colSpan={7} />
                   </tr>
                 </>
               )}
