@@ -230,7 +230,7 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
           <tr>
             <td style={CELL}>Salaire imposable</td>
             <td style={CELL}></td>
-            <td style={CELL_RIGHT}>{fmt(p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0)}</td>
+            <td style={CELL_RIGHT}>{fmt(p.salaire_imposable_affiche != null ? p.salaire_imposable_affiche : (p.salaire_brut ? p.salaire_brut - (p.cnss_salarial || 0) : 0))}</td>
           </tr>
 
           {/* ── Contrôle CNSS fiscal ── */}

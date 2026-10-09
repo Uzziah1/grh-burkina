@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { getInitials, avatarColor } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
 import {
-  calculerBulletin, calculerPersonnesACharge, formatFCFA,
+  calculerBulletin, formatFCFA,
 } from '../lib/calcPaie';
 import {
   DollarSign, Plus, FileText, Search,
@@ -598,8 +598,7 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
       heures_sup:           0,
       autres_retenues:      0,
       avance_salaire:       0,
-      situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
-      nombre_enfants:         agent.nombre_enfants || 0,
+      charges_familiales:   agent.charges_familiales || 0,
     });
 
     const bulletin = {
@@ -799,8 +798,7 @@ export default function Paie({ agents, entreprise, profil }) {
           heures_sup:             0,
           autres_retenues:        0,
           avance_salaire:         totalAvances,
-          situation_matrimoniale: agent.situation_matrimoniale || 'Célibataire',
-          nombre_enfants:         agent.nombre_enfants || 0,
+          charges_familiales:     agent.charges_familiales || 0,
         });
 
         const bulletinData = {
@@ -917,8 +915,7 @@ export default function Paie({ agents, entreprise, profil }) {
   const selectedAgent = getAgent(form.agent_id);
   const preview = form.agent_id && form.salaire_base ? calculerBulletin({
     ...form,
-    situation_matrimoniale: selectedAgent?.situation_matrimoniale || 'Célibataire',
-    nombre_enfants: selectedAgent?.nombre_enfants || 0,
+    charges_familiales: selectedAgent?.charges_familiales || 0,
   }) : null;
 
   // ── Save bulletin ──
@@ -931,8 +928,7 @@ export default function Paie({ agents, entreprise, profil }) {
     const agent = getAgent(form.agent_id);
     const calc = calculerBulletin({
       ...form,
-      situation_matrimoniale: agent?.situation_matrimoniale || 'Célibataire',
-      nombre_enfants: agent?.nombre_enfants || 0,
+      charges_familiales: agent?.charges_familiales || 0,
     });
 
     const data = {
@@ -1306,8 +1302,7 @@ export default function Paie({ agents, entreprise, profil }) {
                   borderRadius: 8, fontSize: 11, color: '#92400E',
                 }}>
                   Situation : <strong>{selectedAgent.situation_matrimoniale || 'Célibataire'}</strong>
-                  {' '}— {selectedAgent.nombre_enfants || 0} enfant(s) à charge
-                  {' '}({calculerPersonnesACharge(selectedAgent.situation_matrimoniale, selectedAgent.nombre_enfants)} pers. retenues, max 6 enfants)
+                  {' '}— {selectedAgent.nombre_enfants || 0} enfant(s) — Charges familiales : <strong>{selectedAgent.charges_familiales || 0}</strong> pers.
                 </div>
               )}
 

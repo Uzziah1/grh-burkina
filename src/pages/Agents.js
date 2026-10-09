@@ -29,7 +29,7 @@ const SITUATIONS = ['Célibataire', 'Marié(e)', 'Divorcé(e)', 'Veuf/Veuve'];
 const EMPTY_FORM = {
   matricule: '', nom: '', prenom: '', sexe: '', date_naissance: '',
   lieu_naissance: '', nationalite: 'Burkinabè', situation_matrimoniale: '',
-  nombre_enfants: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
+  nombre_enfants: 0, charges_familiales: 0, nin: '', cnib: '', cnss: '', adresse: '', telephone: '',
   email: '', urgence_nom: '', urgence_telephone: '', niveau_etudes: '',
   diplome: '', specialite: '', poste: '', departement: '',
   categorie_socioprofessionnelle: '', type_contrat: 'CDI',
@@ -133,6 +133,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       indemnite_transport: a.indemnite_transport || 0,
       indemnite_fonction:  a.indemnite_fonction || 0,
       nombre_enfants:      a.nombre_enfants || 0,
+      charges_familiales:  a.charges_familiales || 0,
       cnib:                a.cnib || '',
     });
     setEditAgent(a);
@@ -158,6 +159,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       indemnite_transport: parseFloat(form.indemnite_transport) || 0,
       indemnite_fonction:  parseFloat(form.indemnite_fonction) || 0,
       nombre_enfants:      parseInt(form.nombre_enfants) || 0,
+      charges_familiales:  parseInt(form.charges_familiales) || 0,
       date_naissance:      form.date_naissance || null,
       date_embauche:       form.date_embauche || null,
       date_fin_contrat:    form.date_fin_contrat || null,
@@ -812,6 +814,7 @@ function importExcel(file) {
                 </select>
               </div>
               <div className="form-group"><label>Nombre d'enfants</label><input type="number" min="0" value={form.nombre_enfants} onChange={e => setF('nombre_enfants', e.target.value)} /></div>
+              <div className="form-group"><label>Charges familiales (personnes à charge)</label><input type="number" min="0" max="7" value={form.charges_familiales} onChange={e => setF('charges_familiales', e.target.value)} placeholder="0 à 7" /></div>
               <div className="form-group"><label>NIN</label><input value={form.nin} onChange={e => setF('nin', e.target.value)} placeholder="Numéro d'identification" /></div>
               <div className="form-group"><label>N° CNIB</label><input value={form.cnib} onChange={e => setF('cnib', e.target.value)} placeholder="Ex: B1234567" /></div>
               <div className="form-group"><label>N° CNSS</label><input value={form.cnss} onChange={e => setF('cnss', e.target.value)} placeholder="N° CNSS" /></div>
