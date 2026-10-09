@@ -1183,13 +1183,13 @@ export default function Paie({ agents, entreprise, profil }) {
                         <div style={{ fontSize: 11, color: '#A3A3A3' }}>{b.agents?.poste}</div>
                       </div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{(b.salaire_brut || 0).toLocaleString('fr-FR')}</td>
-                    <td>{(b.cnss_salarial || 0).toLocaleString('fr-FR')}</td>
-                    <td>{(b.iuts || 0).toLocaleString('fr-FR')}</td>
+                    <td style={{ fontWeight: 600 }}>{Math.round(b.salaire_brut || 0).toLocaleString('fr-FR')}</td>
+                    <td>{Math.round(b.cnss_salarial || 0).toLocaleString('fr-FR')}</td>
+                    <td>{Math.round(b.iuts || 0).toLocaleString('fr-FR')}</td>
                     <td style={{ color: b.avance_salaire > 0 ? '#0F0F0F' : '#A3A3A3' }}>
-                      {b.avance_salaire > 0 ? (b.avance_salaire).toLocaleString('fr-FR') : '—'}
+                      {b.avance_salaire > 0 ? Math.round(b.avance_salaire).toLocaleString('fr-FR') : '—'}
                     </td>
-                    <td style={{ fontWeight: 700, fontSize: 14 }}>{(b.salaire_net || 0).toLocaleString('fr-FR')}</td>
+                    <td style={{ fontWeight: 700, fontSize: 14 }}>{Math.round(b.salaire_net || 0).toLocaleString('fr-FR')}</td>
                     <td>
                       <span className={`badge ${b.statut === 'Validé' ? 'badge-green' : 'badge-orange'}`}>
                         {b.statut}
