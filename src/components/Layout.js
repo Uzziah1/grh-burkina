@@ -7,7 +7,7 @@ import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
   DollarSign, FolderOpen, Building2, UserCog,
-  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList,
+  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList, CreditCard,
 } from 'lucide-react';
 
 // ── App version ────────────────────────────────────────────
@@ -23,6 +23,7 @@ const mainNavItems = [
   { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
 { id: 'etatSalaires',  label: 'État des salaires', permission: 'voirEtatSalaires', icon: ClipboardList },
   { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
+  { id: 'badges',       label: 'Badges',           permission: 'voirDocuments',    icon: CreditCard },
   { id: 'historique',   label: 'Journalisation',   permission: 'voirAgents',       icon: History },
 ];
 
@@ -41,6 +42,7 @@ const pageTitles = {
   paie:         'Bulletins de paie',
   etatSalaires: 'État des salaires',
   documents:    'Documents',
+  badges:       'Badges agents',
   entreprise:   'Mon Entreprise',
   utilisateurs: 'Gestion des utilisateurs',
   historique:   'Historique des modifications',

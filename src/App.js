@@ -15,6 +15,7 @@ import Utilisateurs from './pages/Utilisateurs';
 import Paie from './pages/Paie';
 import Historique from './pages/Historique';
 import EtatSalaires from './pages/EtatSalaires';
+import Badge from './pages/Badge';
 
 function SkeletonApp() {
   return (
@@ -214,6 +215,7 @@ export default function App() {
       <div style={show('avances')}><Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
       <div style={show('paie')}><Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
       <div style={show('documents')}><Documents agents={agents} entreprise={entreprise} profil={profil} /></div>
+      <div style={show('badges')}><Badge agents={agents} entreprise={entreprise} /></div>
       <div style={show('etatSalaires')}><EtatSalaires entreprise={entreprise} profil={profil} /></div>
       <div style={show('historique')}><Historique /></div>
       <div style={show('entreprise')}><Entreprise onRefresh={loadData} /></div>
