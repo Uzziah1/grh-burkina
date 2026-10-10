@@ -204,10 +204,10 @@ function generateEtatPDF(bulletins, entreprise, mois, annee) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text(entreprise?.qualite_representant || 'LE GERANT', sigX, finalY + 18, { align: 'center' });
-  if (entreprise?.representant_nom) {
+  if (entreprise?.representant) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(entreprise.representant_nom, sigX, finalY + 24, { align: 'center' });
+    doc.text(entreprise.representant, sigX, finalY + 24, { align: 'center' });
   }
   if (entreprise?.mention_signataire) {
     doc.setFontSize(7);
@@ -316,9 +316,9 @@ function exportEtatExcel(bulletins, entreprise, mois, annee) {
     rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
       entreprise.qualite_representant]);
   }
-  if (entreprise?.representant_nom) {
+  if (entreprise?.representant) {
     rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-      entreprise.representant_nom]);
+      entreprise.representant]);
   }
   if (entreprise?.mention_signataire) {
     rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',

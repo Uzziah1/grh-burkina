@@ -95,7 +95,8 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
 
   // ── Update advance status ──
   async function updateStatut(id, statut) {
-    await supabase.from('avances').update({ statut }).eq('id', id);
+    const { error } = await supabase.from('avances').update({ statut }).eq('id', id);
+    if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
     showToast(`Demande ${statut.toLowerCase()}`);
     onRefresh();
   }

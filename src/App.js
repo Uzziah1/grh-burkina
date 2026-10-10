@@ -183,7 +183,7 @@ export default function App() {
       <div style={show('contrats')}><Contrats agents={agents} onOpenFiche={openFiche} /></div>
       <div style={show('conges')}><Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
       <div style={show('avances')}><Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
-      <div style={show('paie')}><Paie agents={agents} onRefresh={loadData} profil={profil} /></div>
+      <div style={show('paie')}><Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
       <div style={show('documents')}><Documents agents={agents} entreprise={entreprise} profil={profil} /></div>
       <div style={show('etatSalaires')}><EtatSalaires entreprise={entreprise} profil={profil} /></div>
       <div style={show('historique')}><Historique /></div>

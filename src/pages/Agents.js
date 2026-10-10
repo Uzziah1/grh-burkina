@@ -109,8 +109,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     if (filters.age) {
       const a_ = age(a.date_naissance);
       if (filters.age === '<30'   && a_ >= 30)              return false;
-      if (filters.age === '30-40' && (a_ < 30 || a_ > 40)) return false;
-      if (filters.age === '40-50' && (a_ < 40 || a_ > 50)) return false;
+      if (filters.age === '30-40' && (a_ < 30 || a_ >= 40)) return false;
+      if (filters.age === '40-50' && (a_ < 40 || a_ >= 50)) return false;
       if (filters.age === '>50'   && a_ <= 50)              return false;
     }
     return true;

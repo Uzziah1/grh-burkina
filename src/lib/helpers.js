@@ -28,7 +28,7 @@ export function formatDate(date) {
 }
 
 export function formatMontant(montant) {
-  if (!montant) return '-';
+  if (montant === null || montant === undefined || montant === '') return '-';
   return parseInt(montant).toLocaleString('fr-FR') + ' FCFA';
 }
 

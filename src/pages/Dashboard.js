@@ -2,8 +2,7 @@
 // Displays key HR metrics, charts and recent activity
 
 import React from 'react';
-import { age, formatDate, formatMontant, joursRestants } from '../lib/helpers';
-import { avatarColor, getInitials } from '../lib/helpers';
+import { age, formatDate, formatMontant, joursRestants, avatarColor, getInitials } from '../lib/helpers';
 import {
   Users, FileText, AlertTriangle, TrendingUp,
   Clock, DollarSign, UserCheck, Eye,

@@ -917,6 +917,7 @@ export default function Paie({ agents, entreprise, profil }) {
   const preview = form.agent_id && form.salaire_base ? calculerBulletin({
     ...form,
     charges_familiales: selectedAgent?.charges_familiales || 0,
+    categorie_socioprofessionnelle: selectedAgent?.categorie_socioprofessionnelle || '',
   }) : null;
 
   // ── Save bulletin ──
@@ -930,6 +931,7 @@ export default function Paie({ agents, entreprise, profil }) {
     const calc = calculerBulletin({
       ...form,
       charges_familiales: agent?.charges_familiales || 0,
+      categorie_socioprofessionnelle: agent?.categorie_socioprofessionnelle || '',
     });
 
     const data = {
@@ -1105,18 +1107,18 @@ export default function Paie({ agents, entreprise, profil }) {
       {/* ── Stats ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Bulletins',             value: bulletins.length, color: '#E8920A', icon: FileText },
-          { label: 'Validés',               value: valides,          color: '#16A34A', icon: CheckCircle },
-          { label: 'Masse salariale brute', value: `${Math.round(totalBrut/1000)}K`, color: '#2563EB', icon: DollarSign },
-          { label: 'Masse nette',           value: `${Math.round(totalNet/1000)}K`,  color: '#16A34A', icon: DollarSign },
-          { label: 'Charge CNSS pat.',      value: `${Math.round(totalCNSS/1000)}K`, color: '#DC2626', icon: DollarSign },
+          { label: 'Bulletins',             value: bulletins.length, sub: 'ce mois',  color: '#E8920A', icon: FileText },
+          { label: 'Validés',               value: valides,          sub: 'validés',  color: '#16A34A', icon: CheckCircle },
+          { label: 'Masse salariale brute', value: `${Math.round(totalBrut/1000)}K`, sub: 'FCFA', color: '#2563EB', icon: DollarSign },
+          { label: 'Masse nette',           value: `${Math.round(totalNet/1000)}K`,  sub: 'FCFA', color: '#16A34A', icon: DollarSign },
+          { label: 'Charge CNSS pat.',      value: `${Math.round(totalCNSS/1000)}K`, sub: 'FCFA', color: '#DC2626', icon: DollarSign },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div className="stat-label">{s.label}</div>
                 <div className="stat-value" style={{ color: s.color, fontSize: 20 }}>{s.value}</div>
-                <div className="stat-sub">FCFA</div>
+                <div className="stat-sub">{s.sub}</div>
               </div>
               <div style={{
                 width: 40, height: 40, borderRadius: 10,

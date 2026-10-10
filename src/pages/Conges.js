@@ -91,7 +91,8 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
 
   // ── Update leave status ──
   async function updateStatut(id, statut) {
-    await supabase.from('conges').update({ statut }).eq('id', id);
+    const { error } = await supabase.from('conges').update({ statut }).eq('id', id);
+    if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
     showToast(`Demande ${statut.toLowerCase()}`);
     onRefresh();
   }
