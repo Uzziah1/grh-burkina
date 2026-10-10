@@ -1,5 +1,6 @@
-// Conges.js - Leave management page
-// Features: leave requests, approval/rejection, PDF authorization generation
+// Conges.js — Gestion des demandes de congés
+// Fonctionnalités : dépôt, approbation/refus, calcul auto des jours ouvrables,
+//                  génération PDF de l'autorisation de congé
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -11,7 +12,7 @@ import {
   Clock, CheckCircle, XCircle, Search, FileText,
 } from 'lucide-react';
 
-// ── Toast notification ────────────────────────────────────
+// ── Notification toast ────────────────────────────────────
 function showToast(msg, type = 'success') {
   const colors = { success: '#16A34A', error: '#DC2626', warning: '#D97706' };
   const t = document.createElement('div');
@@ -28,7 +29,25 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-// ── Main Conges component ─────────────────────────────────
+// ── Calcul des jours ouvrables entre deux dates ───────────
+// Exclut les samedis (6) et dimanches (0). Inclut les bornes.
+function calculerJoursOuvrables(dateDebut, dateFin) {
+  if (!dateDebut || !dateFin) return '';
+  const debut = new Date(dateDebut);
+  const fin   = new Date(dateFin);
+  if (isNaN(debut) || isNaN(fin) || fin < debut) return '';
+
+  let jours = 0;
+  const courant = new Date(debut);
+  while (courant <= fin) {
+    const jour = courant.getDay();
+    if (jour !== 0 && jour !== 6) jours++;          // exclure dimanche (0) et samedi (6)
+    courant.setDate(courant.getDate() + 1);
+  }
+  return jours;
+}
+
+// ── Composant principal Conges ────────────────────────────
 export default function Conges({ conges, agents, onRefresh, profil, entreprise }) {
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
@@ -39,9 +58,22 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   });
   const [loading, setLoading] = useState(false);
 
-  function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
+  // Mise à jour d'un champ du formulaire
+  function setF(key, val) {
+    setForm(f => {
+      const updated = { ...f, [key]: val };
+      // Recalcul automatique des jours ouvrables dès que les deux dates sont renseignées
+      if (key === 'date_debut' || key === 'date_fin') {
+        const debut = key === 'date_debut' ? val : f.date_debut;
+        const fin   = key === 'date_fin'   ? val : f.date_fin;
+        const jours = calculerJoursOuvrables(debut, fin);
+        updated.nombre_jours = jours !== '' ? String(jours) : f.nombre_jours;
+      }
+      return updated;
+    });
+  }
 
-  // ── Generate leave authorization PDF ──
+  // ── Génération du PDF d'autorisation de congé ──────────
   async function handleGenerateDoc(conge) {
     const agent = agents.find(a => a.id === conge.agent_id);
     if (!agent) { showToast('Agent introuvable', 'error'); return; }
@@ -57,7 +89,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     }
   }
 
-  // ── Filter leave requests ──
+  // ── Filtrage de la liste ──────────────────────────────
   const filtered = conges.filter(c => {
     const name = `${c.agents?.prenom || ''} ${c.agents?.nom || ''}`.toLowerCase();
     if (search && !name.includes(search.toLowerCase())) return false;
@@ -65,7 +97,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     return true;
   });
 
-  // ── Save leave request ──
+  // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
     if (!form.agent_id || !form.date_debut || !form.date_fin) {
       showToast('Agent, date début et date fin sont obligatoires', 'error');
@@ -79,8 +111,9 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
       nombre_jours: form.nombre_jours ? parseInt(form.nombre_jours) : null,
       motif:        form.motif || null,
     });
-    if (error) showToast('Erreur lors de l\'enregistrement', 'error');
-    else {
+    if (error) {
+      showToast('Erreur lors de l\'enregistrement', 'error');
+    } else {
       showToast('Demande de congé enregistrée');
       setModal(false);
       setForm({ agent_id: '', date_debut: '', date_fin: '', nombre_jours: '', motif: 'Congé annuel payé' });
@@ -89,7 +122,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     setLoading(false);
   }
 
-  // ── Update leave status ──
+  // ── Mise à jour du statut (approbation / refus) ───────
   async function updateStatut(id, statut) {
     const { error } = await supabase.from('conges').update({ statut }).eq('id', id);
     if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
@@ -97,7 +130,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     onRefresh();
   }
 
-  // ── Delete leave request ──
+  // ── Suppression d'une demande ─────────────────────────
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('conges').delete().eq('id', id);
@@ -105,7 +138,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     onRefresh();
   }
 
-  // ── Compute stats ──
+  // ── Statistiques ──────────────────────────────────────
   const enAttente = conges.filter(c => c.statut === 'En attente').length;
   const approuves = conges.filter(c => c.statut === 'Approuvé').length;
   const refuses   = conges.filter(c => c.statut === 'Refusé').length;
@@ -113,16 +146,16 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   return (
     <div>
 
-      {/* ── Stats ── */}
+      {/* ── Cartes statistiques ── */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         gap: 16, marginBottom: 24,
       }}>
         {[
-          { label: 'Total demandes', value: conges.length,  icon: Calendar,     color: '#E8920A' },
-          { label: 'En attente',     value: enAttente,      icon: Clock,        color: '#D97706' },
-          { label: 'Approuvés',      value: approuves,      icon: CheckCircle,  color: '#16A34A' },
-          { label: 'Refusés',        value: refuses,        icon: XCircle,      color: '#DC2626' },
+          { label: 'Total demandes', value: conges.length, icon: Calendar,    color: '#E8920A' },
+          { label: 'En attente',     value: enAttente,     icon: Clock,       color: '#D97706' },
+          { label: 'Approuvés',      value: approuves,     icon: CheckCircle, color: '#16A34A' },
+          { label: 'Refusés',        value: refuses,       icon: XCircle,     color: '#DC2626' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -142,13 +175,13 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
         ))}
       </div>
 
-      {/* ── Table card ── */}
+      {/* ── Tableau des demandes ── */}
       <div className="card">
         <div className="card-header">
           <h3>Demandes de congés ({filtered.length})</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
-            {/* Search */}
+            {/* Recherche par nom */}
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{
                 position: 'absolute', left: 10, top: '50%',
@@ -163,7 +196,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
               />
             </div>
 
-            {/* Filter by status */}
+            {/* Filtre par statut */}
             <select
               className="filter-select"
               value={filterStatut}
@@ -176,7 +209,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
               <option value="Refusé">Refusé</option>
             </select>
 
-            {/* Add button */}
+            {/* Bouton nouvelle demande (selon permission) */}
             {peutFaire(profil, 'modifierConges') && (
               <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
                 <Plus size={14} />
@@ -284,7 +317,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
       </div>
 
       {/* ════════════════════════════════
-          MODAL: New leave request
+          MODAL : Nouvelle demande de congé
       ════════════════════════════════ */}
       {modal && (
         <div className="modal-overlay" onClick={e => {
@@ -299,6 +332,8 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
             </div>
             <div className="modal-body">
               <div className="form-grid">
+
+                {/* Sélection de l'agent */}
                 <div className="form-group full">
                   <label>Agent *</label>
                   <select value={form.agent_id} onChange={e => setF('agent_id', e.target.value)}>
@@ -310,22 +345,53 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
                     ))}
                   </select>
                 </div>
+
+                {/* Dates de début et de fin */}
                 <div className="form-group">
                   <label>Date début *</label>
-                  <input type="date" value={form.date_debut} onChange={e => setF('date_debut', e.target.value)} />
+                  <input
+                    type="date"
+                    value={form.date_debut}
+                    onChange={e => setF('date_debut', e.target.value)}
+                  />
                 </div>
                 <div className="form-group">
                   <label>Date fin *</label>
-                  <input type="date" value={form.date_fin} onChange={e => setF('date_fin', e.target.value)} />
+                  <input
+                    type="date"
+                    value={form.date_fin}
+                    onChange={e => setF('date_fin', e.target.value)}
+                  />
                 </div>
+
+                {/* Nombre de jours (calculé automatiquement, modifiable manuellement) */}
                 <div className="form-group">
-                  <label>Nombre de jours</label>
-                  <input type="number" min="1" value={form.nombre_jours} onChange={e => setF('nombre_jours', e.target.value)} />
+                  <label>
+                    Nombre de jours ouvrables
+                    {form.date_debut && form.date_fin && (
+                      <span style={{ fontWeight: 400, color: '#A3A3A3', marginLeft: 6, fontSize: 11 }}>
+                        (calculé automatiquement)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.nombre_jours}
+                    onChange={e => setF('nombre_jours', e.target.value)}
+                    placeholder="Ex : 10"
+                  />
                 </div>
+
+                {/* Motif */}
                 <div className="form-group">
                   <label>Motif</label>
-                  <input value={form.motif} onChange={e => setF('motif', e.target.value)} />
+                  <input
+                    value={form.motif}
+                    onChange={e => setF('motif', e.target.value)}
+                  />
                 </div>
+
               </div>
             </div>
             <div className="modal-footer">

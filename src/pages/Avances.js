@@ -1,5 +1,6 @@
-// Avances.js - Salary advance management page
-// Features: advance requests, approval/rejection, total tracking, PDF generation
+// Avances.js — Gestion des avances sur salaire
+// Fonctionnalités : dépôt de demande, approbation/refus, suivi des montants,
+//                  génération du document de demande d'avance en PDF
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import { generateAvance } from '../lib/generatePDF';
 
-// ── Toast notification ────────────────────────────────────
+// ── Notification toast ────────────────────────────────────
 function showToast(msg, type = 'success') {
   const colors = { success: '#16A34A', error: '#DC2626', warning: '#D97706' };
   const t = document.createElement('div');
@@ -28,7 +29,7 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-// ── Main Avances component ────────────────────────────────
+// ── Composant principal Avances ───────────────────────────
 export default function Avances({ avances, agents, onRefresh, profil, entreprise }) {
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
@@ -40,9 +41,10 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   });
   const [loading, setLoading] = useState(false);
 
+  // Mise à jour d'un champ du formulaire
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
-  // ── Generate advance request PDF ──
+  // ── Génération du document de demande d'avance ─────────
   async function handleGenerateDoc(avance) {
     const agent = agents.find(a => a.id === avance.agent_id);
     if (!agent) { showToast('Agent introuvable', 'error'); return; }
@@ -58,7 +60,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     }
   }
 
-  // ── Filter advances ──
+  // ── Filtrage de la liste ──────────────────────────────
   const filtered = avances.filter(a => {
     const name = `${a.agents?.prenom || ''} ${a.agents?.nom || ''}`.toLowerCase();
     if (search && !name.includes(search.toLowerCase())) return false;
@@ -66,7 +68,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     return true;
   });
 
-  // ── Save advance request ──
+  // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
     if (!form.agent_id || !form.montant) {
       showToast('Agent et montant sont obligatoires', 'error');
@@ -79,8 +81,9 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
       date_demande: form.date_demande || null,
       motif:        form.motif || null,
     });
-    if (error) showToast('Erreur lors de l\'enregistrement', 'error');
-    else {
+    if (error) {
+      showToast('Erreur lors de l\'enregistrement', 'error');
+    } else {
       showToast('Demande d\'avance enregistrée');
       setModal(false);
       setForm({
@@ -93,7 +96,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     setLoading(false);
   }
 
-  // ── Update advance status ──
+  // ── Mise à jour du statut (approbation / refus) ───────
   async function updateStatut(id, statut) {
     const { error } = await supabase.from('avances').update({ statut }).eq('id', id);
     if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
@@ -101,7 +104,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     onRefresh();
   }
 
-  // ── Delete advance request ──
+  // ── Suppression d'une demande ─────────────────────────
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('avances').delete().eq('id', id);
@@ -109,7 +112,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     onRefresh();
   }
 
-  // ── Compute stats ──
+  // ── Statistiques ──────────────────────────────────────
   const enAttente    = avances.filter(a => a.statut === 'En attente').length;
   const approuves    = avances.filter(a => a.statut === 'Approuvé').length;
   const totalMontant = avances
@@ -119,16 +122,16 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   return (
     <div>
 
-      {/* ── Stats ── */}
+      {/* ── Cartes statistiques ── */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         gap: 16, marginBottom: 24,
       }}>
         {[
-          { label: 'Total demandes',    value: avances.length,                 icon: DollarSign,  color: '#E8920A' },
-          { label: 'En attente',        value: enAttente,                      icon: Clock,       color: '#D97706' },
-          { label: 'Approuvées',        value: approuves,                      icon: CheckCircle, color: '#16A34A' },
-          { label: 'Montant approuvé',  value: `${Math.round(totalMontant / 1000)}K FCFA`, icon: TrendingUp,  color: '#2563EB' },
+          { label: 'Total demandes',   value: avances.length,                         icon: DollarSign,  color: '#E8920A' },
+          { label: 'En attente',       value: enAttente,                              icon: Clock,       color: '#D97706' },
+          { label: 'Approuvées',       value: approuves,                              icon: CheckCircle, color: '#16A34A' },
+          { label: 'Montant approuvé', value: `${Math.round(totalMontant / 1000)}K FCFA`, icon: TrendingUp,  color: '#2563EB' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -150,13 +153,13 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
         ))}
       </div>
 
-      {/* ── Table card ── */}
+      {/* ── Tableau des demandes ── */}
       <div className="card">
         <div className="card-header">
           <h3>Avances sur salaire ({filtered.length})</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
-            {/* Search */}
+            {/* Recherche par nom */}
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{
                 position: 'absolute', left: 10, top: '50%',
@@ -171,7 +174,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
               />
             </div>
 
-            {/* Filter by status */}
+            {/* Filtre par statut */}
             <select
               className="filter-select"
               value={filterStatut}
@@ -184,7 +187,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
               <option value="Refusé">Refusé</option>
             </select>
 
-            {/* Add button */}
+            {/* Bouton nouvelle demande (selon permission) */}
             {peutFaire(profil, 'modifierAvances') && (
               <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
                 <Plus size={14} />
@@ -219,7 +222,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div className="avatar" style={{
                         background: avatarColor(a.agents?.nom || '').bg,
-                        color: avatarColor(a.agents?.nom || '').fg,
+                        color:      avatarColor(a.agents?.nom || '').fg,
                       }}>
                         {getInitials(a.agents?.nom, a.agents?.prenom)}
                       </div>
@@ -228,7 +231,9 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                       </span>
                     </div>
                   </td>
-                  <td style={{ fontWeight: 700, fontSize: 14, color: '#0F0F0F' }}>{formatMontant(a.montant)}</td>
+                  <td style={{ fontWeight: 700, fontSize: 14, color: '#0F0F0F' }}>
+                    {formatMontant(a.montant)}
+                  </td>
                   <td style={{ color: '#737373' }}>{formatDate(a.date_demande)}</td>
                   <td style={{ color: '#404040' }}>{a.motif || '—'}</td>
                   <td>
@@ -242,6 +247,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                   {peutFaire(profil, 'modifierAvances') && (
                     <td>
                       <div className="row-actions">
+                        {/* Boutons d'approbation / refus pour les demandes en attente */}
                         {a.statut === 'En attente' && (
                           <>
                             <button
@@ -262,6 +268,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                             </button>
                           </>
                         )}
+                        {/* Génération du document pour les avances approuvées */}
                         {a.statut === 'Approuvé' && (
                           <button
                             className="btn btn-secondary btn-sm"
@@ -290,7 +297,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
       </div>
 
       {/* ════════════════════════════════
-          MODAL: New advance request
+          MODAL : Nouvelle demande d'avance
       ════════════════════════════════ */}
       {modal && (
         <div className="modal-overlay" onClick={e => {
@@ -305,6 +312,8 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
             </div>
             <div className="modal-body">
               <div className="form-grid">
+
+                {/* Sélection de l'agent */}
                 <div className="form-group full">
                   <label>Agent *</label>
                   <select value={form.agent_id} onChange={e => setF('agent_id', e.target.value)}>
@@ -316,15 +325,20 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                     ))}
                   </select>
                 </div>
+
+                {/* Montant */}
                 <div className="form-group">
                   <label>Montant (FCFA) *</label>
                   <input
-                    type="number" min="0"
+                    type="number"
+                    min="0"
                     value={form.montant}
                     onChange={e => setF('montant', e.target.value)}
-                    placeholder="Ex: 50000"
+                    placeholder="Ex : 50000"
                   />
                 </div>
+
+                {/* Date de demande */}
                 <div className="form-group">
                   <label>Date de demande</label>
                   <input
@@ -333,6 +347,8 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                     onChange={e => setF('date_demande', e.target.value)}
                   />
                 </div>
+
+                {/* Motif */}
                 <div className="form-group full">
                   <label>Motif</label>
                   <input
@@ -341,6 +357,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                     placeholder="Raison de la demande..."
                   />
                 </div>
+
               </div>
             </div>
             <div className="modal-footer">

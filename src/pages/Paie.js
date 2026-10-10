@@ -7,9 +7,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { peutFaire } from '../lib/useProfil';
-import {
-  calculerBulletin, formatFCFA,
-} from '../lib/calcPaie';
+import { calculerBulletin } from '../lib/calcPaie';
+import { formatMontant } from '../lib/helpers';
 import {
   DollarSign, Plus, FileText, Search,
   X, Save, Printer, Eye, Trash2, CheckCircle, FileSpreadsheet,
@@ -1349,7 +1348,7 @@ export default function Paie({ agents, entreprise, profil }) {
                   borderRadius: 8, fontSize: 11, color: '#92400E',
                 }}>
                   💰 <strong>{avancesAgent.length} avance(s) approuvée(s)</strong> détectée(s) et appliquée(s) automatiquement
-                  ({formatFCFA(avancesAgent.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0))})
+                  ({formatMontant(avancesAgent.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0))})
                 </div>
               )}
 

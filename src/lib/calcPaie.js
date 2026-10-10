@@ -1,41 +1,44 @@
-// calcPaie.js - Burkina Faso payroll calculation engine
-// Logic replicated from FASO ARMORED payroll Excel model
+// calcPaie.js — Moteur de calcul de la paie (Burkina Faso)
+// Reproduit la logique du modèle Excel FASO ARMORED
 //
-// Calculation order:
-// 1. Salaire brut = somme des éléments de rémunération
-// 2. CNSS salarié = 5.5% du brut, plafonné à 44 000 FCFA (valeur décimale, pas arrondie)
-// 3. Contrôle CNSS fiscal = salaire_base × 8%
-// 4. Salaire imposable IUTS = brut - contrôle fiscal
-// 5. Exonérations sur indemnités (logement 20%/75k, transport 5%/30k, fonction 5%/50k)
-//    plafonnées à l'indemnité réelle payée
-// 6. Abattement forfaitaire = 25% du salaire de base
-// 7. Base IUTS = imposable_IUTS - exonérations - abattement (arrondie à la centaine inférieure)
-// 8. IUTS brut = barème progressif par tranches (sur base arrondie)
-// 9. Abattement charges familiales = % selon nombre de personnes à charge
-//    (charges_familiales = champ direct sur l'agent)
-// 10. Net IUTS = IUTS brut - abattement familial
-// 11. Salaire net = brut - CNSS - Net IUTS - autres retenues - avance
-// NB: pas d'arrondi intermédiaire sauf base IUTS et salaire net final
+// Ordre de calcul :
+//  1. Salaire brut = somme de tous les éléments de rémunération
+//  2. CNSS salarié = 5,5 % du brut, plafonné à 44 000 FCFA (valeur décimale, non arrondie)
+//  3. Contrôle CNSS fiscal = salaire_base × 8 %
+//  4. Salaire imposable IUTS = brut − contrôle fiscal
+//  5. Exonérations sur indemnités (logement 20 %/75 k, transport 5 %/30 k, fonction 5 %/50 k)
+//     plafonnées à l'indemnité réelle versée
+//  6. Abattement forfaitaire = 25 % du salaire de base (ouvriers) ou 20 % (cadres/maîtrise)
+//  7. Base IUTS = imposable_IUTS − exonérations − abattement (arrondie à la centaine inférieure)
+//  8. IUTS brut = barème progressif par tranches sur la base arrondie
+//  9. Abattement charges familiales = % selon le nombre de personnes à charge (max 4)
+// 10. Net IUTS = IUTS brut − abattement familial
+// 11. Salaire net = brut − CNSS − Net IUTS − autres retenues − avance
+//
+// Note : aucun arrondi intermédiaire sauf base IUTS et salaire net final.
+// La retenue effort de guerre (1 % du net) est une charge patronale, elle n'impacte
+// pas le salaire net de l'agent — elle est affichée dans l'état des salaires uniquement.
 
-// ── CNSS constants ────────────────────────────────────────
-const CNSS_TAUX            = 0.055;   // 5.5% employee contribution
-const CNSS_PLAFOND_MONTANT = 44000;   // Monthly cap on CNSS contribution (FCFA)
-const CNSS_FISCAL_TAUX     = 0.08;    // 8% control rate on base salary
-const CNSS_PATRONAL_TAUX   = 0.16;    // 16% employer contribution
+// ── Taux et plafonds CNSS ─────────────────────────────────
+const CNSS_TAUX            = 0.055;   // 5,5 % cotisation salarié
+const CNSS_PLAFOND_MONTANT = 44000;   // Plafond mensuel de cotisation CNSS (FCFA)
+const CNSS_FISCAL_TAUX     = 0.08;    // 8 % contrôle fiscal sur le salaire de base
+const CNSS_PATRONAL_TAUX   = 0.16;    // 16 % cotisation patronale
 
-// ── Exemption caps for allowances ──────────────────────────
-const EXO_LOGEMENT_TAUX    = 0.20;
-const EXO_LOGEMENT_PLAFOND = 75000;
-const EXO_TRANSPORT_TAUX   = 0.05;
+// ── Plafonds d'exonération sur indemnités ─────────────────
+const EXO_LOGEMENT_TAUX     = 0.20;
+const EXO_LOGEMENT_PLAFOND  = 75000;
+const EXO_TRANSPORT_TAUX    = 0.05;
 const EXO_TRANSPORT_PLAFOND = 30000;
-const EXO_FONCTION_TAUX    = 0.05;
-const EXO_FONCTION_PLAFOND = 50000;
+const EXO_FONCTION_TAUX     = 0.05;
+const EXO_FONCTION_PLAFOND  = 50000;
 
-// ── Flat-rate allowance (by category) ────────────────────
-// Ouvriers: 25%, Agents de maîtrise & Cadres: 20%
+// ── Taux d'abattement forfaitaire selon catégorie ─────────
+// Ouvriers : 25 % — Agents de maîtrise & Cadres : 20 %
 const ABATTEMENT_FORFAITAIRE_TAUX_OUVRIER = 0.25;
 const ABATTEMENT_FORFAITAIRE_TAUX_CADRE   = 0.20;
 
+// Retourne le taux d'abattement forfaitaire selon la catégorie socioprofessionnelle
 function getAbattementTaux(categorie) {
   const cat = (categorie || '').toLowerCase();
   if (cat.includes('cadre') || cat.includes('maîtrise') || cat.includes('maitrise')) {
@@ -44,21 +47,21 @@ function getAbattementTaux(categorie) {
   return ABATTEMENT_FORFAITAIRE_TAUX_OUVRIER;
 }
 
-// ── IUTS progressive brackets (monthly taxable base) ──────
+// ── Barème IUTS progressif (base imposable mensuelle) ─────
 const IUTS_BAREME = [
-  { plafond: 10000,     taux: 0     },
-  { plafond: 20000,     taux: 0     },
-  { plafond: 30000,     taux: 0     },
-  { plafond: 50000,     taux: 0.121 },
-  { plafond: 80000,     taux: 0.139 },
-  { plafond: 120000,    taux: 0.157 },
-  { plafond: 170000,    taux: 0.184 },
-  { plafond: 250000,    taux: 0.217 },
-  { plafond: Infinity,  taux: 0.25  },
+  { plafond: 10000,    taux: 0     },
+  { plafond: 20000,    taux: 0     },
+  { plafond: 30000,    taux: 0     },
+  { plafond: 50000,    taux: 0.121 },
+  { plafond: 80000,    taux: 0.139 },
+  { plafond: 120000,   taux: 0.157 },
+  { plafond: 170000,   taux: 0.184 },
+  { plafond: 250000,   taux: 0.217 },
+  { plafond: Infinity, taux: 0.25  },
 ];
 
-// ── Family charge abatement rates ─────────────────────────
-// charges_familiales = nombre direct de personnes à charge (max 4)
+// ── Taux d'abattement charges familiales ──────────────────
+// charges_familiales = nombre de personnes à charge (champ direct de l'agent, max 4)
 const ABATTEMENT_CHARGES = {
   0: 0,
   1: 0.08,
@@ -67,23 +70,25 @@ const ABATTEMENT_CHARGES = {
   4: 0.14,
 };
 
-// ── Calculate CNSS employee contribution (capped) ─────────
+// ── Calcul de la cotisation CNSS salarié (plafonnée) ──────
 export function calculerCNSS(salaireBrut) {
   const brut = parseFloat(salaireBrut) || 0;
   return Math.min(brut * CNSS_TAUX, CNSS_PLAFOND_MONTANT);
 }
 
-// ── Calculate employer CNSS contribution ──────────────────
+// ── Calcul de la cotisation CNSS patronale ────────────────
 export function calculerCNSSPatronal(salaireBrut) {
   const brut = parseFloat(salaireBrut) || 0;
   return brut * CNSS_PATRONAL_TAUX;
 }
 
-// ── Calculate progressive IUTS from taxable base ──────────
+// ── Calcul de l'IUTS brut sur base imposable ──────────────
+// Application du barème progressif par tranches
 export function calculerIUTSBrut(baseIUTS) {
   const base = Math.max(0, parseFloat(baseIUTS) || 0);
   let impot = 0;
   let plafondPrecedent = 0;
+
   for (const tranche of IUTS_BAREME) {
     if (base <= tranche.plafond) {
       impot += (base - plafondPrecedent) * tranche.taux;
@@ -93,17 +98,18 @@ export function calculerIUTSBrut(baseIUTS) {
       plafondPrecedent = tranche.plafond;
     }
   }
+
   return impot;
 }
 
-// ── Calculate family charge abatement on gross IUTS ───────
+// ── Calcul de l'abattement familial sur l'IUTS brut ───────
 export function calculerAbattementFamilial(iutsBrut, chargesFamiliales) {
   const charges = Math.min(parseInt(chargesFamiliales) || 0, 4);
   const taux = ABATTEMENT_CHARGES[charges] || 0;
   return iutsBrut * taux;
 }
 
-// ── Full payroll calculation ───────────────────────────────
+// ── Calcul complet du bulletin de paie ────────────────────
 export function calculerBulletin(data) {
   const {
     salaire_base                   = 0,
@@ -116,10 +122,11 @@ export function calculerBulletin(data) {
     heures_sup                     = 0,
     autres_retenues                = 0,
     avance_salaire                 = 0,
-    charges_familiales             = 0,  // champ direct de l'agent
-    categorie_socioprofessionnelle = '',  // pour abattement forfaitaire
+    charges_familiales             = 0,   // nombre de personnes à charge (champ direct de l'agent)
+    categorie_socioprofessionnelle = '',   // utilisé pour l'abattement forfaitaire
   } = data;
 
+  // Conversion en nombre de toutes les entrées
   const sBase         = parseFloat(salaire_base) || 0;
   const sSursalaire   = parseFloat(sursalaire) || 0;
   const sLogement     = parseFloat(indemnite_logement) || 0;
@@ -132,23 +139,25 @@ export function calculerBulletin(data) {
   const sAvance       = parseFloat(avance_salaire) || 0;
   const nCharges      = Math.min(parseInt(charges_familiales) || 0, 4);
 
-  // ── Step 1: Salaire brut ──
+  // ── Étape 1 : Salaire brut ────────────────────────────────
   const salaire_brut = sBase + sSursalaire + sLogement + sTransport
     + sFonction + sAnciennete + sAutresPrimes + sHeuresSup;
 
-  // ── Step 2: CNSS salarié (décimal, pas arrondi) ──
+  // ── Étape 2 : CNSS salarié (valeur décimale, non arrondie) ──
   const cnss_salarial = calculerCNSS(salaire_brut);
 
-  // ── Step 3: Contrôle CNSS fiscal ──
+  // ── Étape 3 : Contrôle CNSS fiscal (8 % du salaire de base) ──
   const controle_cnss_fiscal = sBase * CNSS_FISCAL_TAUX;
 
-  // ── Step 4: Salaire imposable IUTS (pour calcul exo) ──
+  // ── Étape 4 : Salaire imposable IUTS (base de calcul des exonérations) ──
   const salaire_brut_imposable = salaire_brut - controle_cnss_fiscal;
 
-  // ── Salaire imposable (affiché = brut - CNSS) ──
+  // Salaire imposable affiché sur le bulletin = brut − CNSS
   const salaire_imposable_affiche = salaire_brut - cnss_salarial;
 
-  // ── Step 5: Exonérations sur indemnités ──
+  // ── Étape 5 : Exonérations sur indemnités ─────────────────
+  // Chaque exonération est plafonnée à la fois par le taux réglementaire
+  // et par l'indemnité réellement versée
   const exo_logement = Math.min(
     Math.min(salaire_brut_imposable * EXO_LOGEMENT_TAUX, EXO_LOGEMENT_PLAFOND),
     sLogement
@@ -163,35 +172,40 @@ export function calculerBulletin(data) {
   );
   const total_exonerations = exo_logement + exo_transport + exo_fonction;
 
-  // ── Step 6: Abattement forfaitaire (selon catégorie) ──
+  // ── Étape 6 : Abattement forfaitaire (selon catégorie) ────
   const abattement_forfaitaire = sBase * getAbattementTaux(categorie_socioprofessionnelle);
 
-  // ── Step 7: Base IUTS (arrondie à la centaine inférieure) ──
+  // ── Étape 7 : Base IUTS (arrondie à la centaine inférieure) ──
   const baseIutsRaw = salaire_brut_imposable - total_exonerations - abattement_forfaitaire;
   const base_iuts = Math.floor(Math.max(0, baseIutsRaw) / 100) * 100;
 
-  // ── Step 8: IUTS brut ──
+  // ── Étape 8 : IUTS brut (barème progressif) ───────────────
   const iuts_brut = calculerIUTSBrut(base_iuts);
 
-  // ── Step 9: Abattement charges familiales ──
-  const personnes_a_charge = nCharges;
+  // ── Étape 9 : Abattement charges familiales ───────────────
+  const personnes_a_charge  = nCharges;
   const abattement_familial = calculerAbattementFamilial(iuts_brut, nCharges);
 
-  // ── Step 10: Net IUTS ──
+  // ── Étape 10 : Net IUTS ───────────────────────────────────
   const iuts = Math.max(0, iuts_brut - abattement_familial);
 
-  // ── Step 11: Salaire net ──
+  // ── Étape 11 : Salaire net ────────────────────────────────
   const salaire_net = Math.round(salaire_brut - cnss_salarial - iuts - sAutresRet - sAvance);
 
-  // ── Employer contribution ──
+  // ── Cotisation patronale CNSS ─────────────────────────────
   const cnss_patronal = calculerCNSSPatronal(salaire_brut);
+
+  // ── Retenue effort de guerre (1 % du net) ─────────────────
+  // Charge entièrement supportée par l'employeur : n'affecte PAS le salaire net de l'agent.
+  // Elle est affichée dans l'état des salaires à titre informatif.
+  const retenue_effort_guerre = Math.round(salaire_net * 0.01);
 
   return {
     salaire_brut,
     cnss_salarial,
     controle_cnss_fiscal,
-    salaire_imposable_affiche,   // brut - CNSS (ligne "Salaire imposable" du bulletin)
-    salaire_brut_imposable,      // brut - contrôle fiscal (base calcul exo)
+    salaire_imposable_affiche,    // brut − CNSS (ligne « Salaire imposable » du bulletin)
+    salaire_brut_imposable,       // brut − contrôle fiscal (base de calcul des exonérations)
     exo_logement,
     exo_transport,
     exo_fonction,
@@ -204,27 +218,11 @@ export function calculerBulletin(data) {
     iuts,
     total_retenues: cnss_salarial + iuts,
     salaire_net_avant_deduction: salaire_brut - cnss_salarial - iuts - sAutresRet,
-    retenue_effort_guerre: 0,
+    retenue_effort_guerre,        // 1 % du net — charge patronale uniquement
     avance_salaire: sAvance,
     salaire_net,
     cnss_patronal,
     nombre_parts: personnes_a_charge,
     charges_familiales: nCharges,
   };
-}
-
-// ── Kept for backward compat ───────────────────────────────
-export function calculerPersonnesACharge(situationMatrimoniale, nombreEnfants = 0) {
-  let charges = 0;
-  if (situationMatrimoniale === 'Marié(e)') charges += 1;
-  charges += Math.min(parseInt(nombreEnfants) || 0, 6);
-  return Math.min(charges, 7);
-}
-
-export const MAX_ENFANTS_CHARGE = 6;
-
-// ── Format FCFA amount ────────────────────────────────────
-export function formatFCFA(montant) {
-  if (montant === null || montant === undefined || isNaN(montant)) return '—';
-  return Math.round(montant).toLocaleString('fr-FR') + ' FCFA';
 }
