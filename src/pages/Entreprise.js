@@ -1,14 +1,14 @@
-// Entreprise.js - Company information management page
-// Features: sticky header, company details, logo upload, signature mention, preview tab
+// Entreprise.js — Gestion des informations de l'entreprise
+// Fonctionnalités : identification, logo, signataires, aperçu PDF
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Building2, FileText, Phone, User,
-  Upload, Trash2, Save, Eye,
+  Upload, Trash2, Save, Eye, Plus, X,
 } from 'lucide-react';
 
-// ── Toast notification ────────────────────────────────────
+// ── Notification toast ────────────────────────────────────
 function showToast(msg, type = 'success') {
   const colors = { success: '#16A34A', error: '#DC2626', warning: '#D97706' };
   const t = document.createElement('div');
@@ -25,7 +25,8 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-// ── Empty form ────────────────────────────────────────────
+// ── Formulaire vide ───────────────────────────────────────
+// "signataires" est un tableau de { role, nom } stocké en JSONB
 const EMPTY_FORM = {
   nom: '', forme_juridique: '', siege_social: '', rccm: '',
   ifu: '', cnss_employeur: '', representant: '',
@@ -33,9 +34,10 @@ const EMPTY_FORM = {
   bp: '', ville: 'Ouagadougou', logo_url: '',
   mention_signataire: '', pied_de_page: '',
   banque: '', numero_compte: '',
+  signataires: [{ role: 'Responsable RH', nom: 'Tégawendé Azaria KABORE' }],
 };
 
-// ── Section card component ────────────────────────────────
+// ── Carte de section ──────────────────────────────────────
 function SectionCard({ title, icon: Icon, children }) {
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -56,28 +58,61 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
-// ── Main Entreprise component ─────────────────────────────
+// ── Composant principal Entreprise ────────────────────────
 export default function Entreprise({ onRefresh }) {
   const [form, setForm] = useState(EMPTY_FORM);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [saving, setSaving]     = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [id, setId] = useState(null);
+  const [id, setId]             = useState(null);
   const [activeTab, setActiveTab] = useState('form');
 
   useEffect(() => { loadEntreprise(); }, []);
 
-  // ── Load company data ──
+  // ── Chargement des données ────────────────────────────
   async function loadEntreprise() {
     setLoading(true);
     const { data } = await supabase.from('entreprise').select('*').limit(1).single();
-    if (data) { setForm({ ...EMPTY_FORM, ...data }); setId(data.id); }
+    if (data) {
+      // Garantit que "signataires" est toujours un tableau
+      const sigs = Array.isArray(data.signataires) ? data.signataires
+        : (data.signataires ? JSON.parse(data.signataires) : EMPTY_FORM.signataires);
+      setForm({ ...EMPTY_FORM, ...data, signataires: sigs });
+      setId(data.id);
+    }
     setLoading(false);
   }
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
-  // ── Upload logo ──
+  // ── Gestion des signataires ───────────────────────────
+
+  // Ajoute un signataire vide
+  function addSignataire() {
+    setForm(f => ({
+      ...f,
+      signataires: [...(f.signataires || []), { role: '', nom: '' }],
+    }));
+  }
+
+  // Supprime le signataire à l'index i
+  function removeSignataire(i) {
+    setForm(f => ({
+      ...f,
+      signataires: f.signataires.filter((_, idx) => idx !== i),
+    }));
+  }
+
+  // Met à jour un champ d'un signataire (role ou nom)
+  function updateSignataire(i, key, val) {
+    setForm(f => {
+      const sigs = [...f.signataires];
+      sigs[i] = { ...sigs[i], [key]: val };
+      return { ...f, signataires: sigs };
+    });
+  }
+
+  // ── Upload du logo ────────────────────────────────────
   async function handleLogoUpload(file) {
     if (!file) return;
     setUploading(true);
@@ -91,14 +126,14 @@ export default function Entreprise({ onRefresh }) {
     setUploading(false);
   }
 
-  // ── Save company data ──
+  // ── Sauvegarde ───────────────────────────────────────
   async function handleSave() {
     setSaving(true);
     const data = { ...form };
     delete data.id;
     delete data.created_at;
 
-    // Tente un premier enregistrement complet
+    // Tente un enregistrement complet
     let error;
     if (id) {
       ({ error } = await supabase.from('entreprise').update(data).eq('id', id));
@@ -106,12 +141,13 @@ export default function Entreprise({ onRefresh }) {
       ({ error } = await supabase.from('entreprise').insert(data));
     }
 
-    // Si erreur colonne inconnue, réessaie sans les champs bancaires (migration pas encore faite)
+    // Si colonne inconnue (migration incomplète), réessaie sans les champs optionnels
     if (error && error.message && error.message.includes('column')) {
-      console.warn('Colonnes manquantes, réessai sans banque/numero_compte:', error.message);
+      console.warn('Colonnes manquantes, réessai sans banque/numero_compte/signataires :', error.message);
       const dataFallback = { ...data };
       delete dataFallback.banque;
       delete dataFallback.numero_compte;
+      delete dataFallback.signataires;
       if (id) {
         ({ error } = await supabase.from('entreprise').update(dataFallback).eq('id', id));
       } else {
@@ -120,7 +156,7 @@ export default function Entreprise({ onRefresh }) {
     }
 
     if (error) {
-      console.error('Erreur sauvegarde entreprise:', error);
+      console.error('Erreur sauvegarde entreprise :', error);
       showToast(`Erreur : ${error.message}`, 'error');
     } else {
       showToast('Informations sauvegardées avec succès');
@@ -143,33 +179,21 @@ export default function Entreprise({ onRefresh }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* ════════════════════════════════
-          STICKY HEADER
+          EN-TÊTE FIXE (sticky)
       ════════════════════════════════ */}
       <div style={{
-        position: 'sticky',
-        top: -28,
-        zIndex: 10,
-        background: '#F5F5F5',
-        paddingTop: 4,
-        paddingBottom: 12,
-        marginTop: -4,
-        marginBottom: 8,
+        position: 'sticky', top: -28, zIndex: 10,
+        background: '#F5F5F5', paddingTop: 4, paddingBottom: 12,
+        marginTop: -4, marginBottom: 8,
       }}>
-        {/* Info bar + save button */}
+        {/* Barre d'info + bouton sauvegarder */}
         <div style={{
-          display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#FFFFFF',
-          border: '1px solid #E5E5E5',
-          borderRadius: 12,
-          padding: '14px 20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-          marginBottom: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: '#FFFFFF', border: '1px solid #E5E5E5',
+          borderRadius: 12, padding: '14px 20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 14,
         }}>
-          <p style={{
-            fontSize: 13, color: '#A3A3A3',
-            fontFamily: 'Poppins, sans-serif', margin: 0,
-          }}>
+          <p style={{ fontSize: 13, color: '#A3A3A3', fontFamily: 'Poppins, sans-serif', margin: 0 }}>
             Ces informations apparaîtront automatiquement sur tous les documents générés.
           </p>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -178,7 +202,7 @@ export default function Entreprise({ onRefresh }) {
           </button>
         </div>
 
-        {/* Tabs */}
+        {/* Onglets */}
         <div className="tabs" style={{ marginBottom: 0 }}>
           {[
             { id: 'form',    label: 'Informations', icon: Building2 },
@@ -201,30 +225,25 @@ export default function Entreprise({ onRefresh }) {
       </div>
 
       {/* ════════════════════════════════
-          SCROLLABLE CONTENT
+          CONTENU DÉFILABLE
       ════════════════════════════════ */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
 
-        {/* ── TAB: Form ── */}
+        {/* ── Onglet Informations ── */}
         {activeTab === 'form' && (
           <div>
 
-            {/* Logo upload */}
+            {/* Logo */}
             <SectionCard title="Logo de l'entreprise" icon={Upload}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                 <div style={{
-                  width: 120, height: 80,
-                  border: '2px dashed #E5E5E5',
-                  borderRadius: 12,
+                  width: 120, height: 80, border: '2px dashed #E5E5E5', borderRadius: 12,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: '#FAFAFA', overflow: 'hidden', flexShrink: 0,
                 }}>
                   {form.logo_url ? (
-                    <img
-                      src={form.logo_url}
-                      alt="Logo"
-                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                    />
+                    <img src={form.logo_url} alt="Logo"
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   ) : (
                     <div style={{ textAlign: 'center' }}>
                       <Building2 size={24} color="#D4D4D4" strokeWidth={1.5} />
@@ -233,27 +252,17 @@ export default function Entreprise({ onRefresh }) {
                   )}
                 </div>
                 <div>
-                  <label
-                    className="btn btn-secondary"
-                    style={{ cursor: 'pointer', marginBottom: 8, display: 'inline-flex' }}
-                  >
+                  <label className="btn btn-secondary" style={{ cursor: 'pointer', marginBottom: 8, display: 'inline-flex' }}>
                     <Upload size={14} />
                     {uploading ? 'Upload en cours...' : 'Choisir un logo'}
-                    <input
-                      type="file" accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={e => handleLogoUpload(e.target.files[0])}
-                      disabled={uploading}
-                    />
+                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                      onChange={e => handleLogoUpload(e.target.files[0])} disabled={uploading} />
                   </label>
                   <p style={{ fontSize: 11, color: '#A3A3A3', marginBottom: 8 }}>
                     Formats acceptés : PNG, JPG, SVG — Max 2MB
                   </p>
                   {form.logo_url && (
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => setF('logo_url', '')}
-                    >
+                    <button className="btn btn-danger btn-sm" onClick={() => setF('logo_url', '')}>
                       <Trash2 size={12} />
                       Supprimer
                     </button>
@@ -262,16 +271,12 @@ export default function Entreprise({ onRefresh }) {
               </div>
             </SectionCard>
 
-            {/* Company identification */}
+            {/* Identification */}
             <SectionCard title="Identification" icon={Building2}>
               <div className="form-grid">
                 <div className="form-group full">
                   <label>Raison sociale *</label>
-                  <input
-                    value={form.nom}
-                    onChange={e => setF('nom', e.target.value)}
-                    placeholder="Ex: Société ABC"
-                  />
+                  <input value={form.nom} onChange={e => setF('nom', e.target.value)} placeholder="Ex: Société ABC" />
                 </div>
                 <div className="form-group">
                   <label>Forme juridique</label>
@@ -284,57 +289,34 @@ export default function Entreprise({ onRefresh }) {
                 </div>
                 <div className="form-group">
                   <label>Ville</label>
-                  <input
-                    value={form.ville}
-                    onChange={e => setF('ville', e.target.value)}
-                    placeholder="Ex: Ouagadougou"
-                  />
+                  <input value={form.ville} onChange={e => setF('ville', e.target.value)} placeholder="Ex: Ouagadougou" />
                 </div>
                 <div className="form-group full">
                   <label>Siège social / Adresse</label>
-                  <input
-                    value={form.siege_social}
-                    onChange={e => setF('siege_social', e.target.value)}
-                    placeholder="Ex: Secteur 4, Rue 10.34, Ouagadougou"
-                  />
+                  <input value={form.siege_social} onChange={e => setF('siege_social', e.target.value)}
+                    placeholder="Ex: Secteur 4, Rue 10.34, Ouagadougou" />
                 </div>
                 <div className="form-group">
                   <label>Boîte postale</label>
-                  <input
-                    value={form.bp}
-                    onChange={e => setF('bp', e.target.value)}
-                    placeholder="Ex: BP 1234"
-                  />
+                  <input value={form.bp} onChange={e => setF('bp', e.target.value)} placeholder="Ex: BP 1234" />
                 </div>
               </div>
             </SectionCard>
 
-            {/* Official numbers */}
+            {/* Numéros officiels */}
             <SectionCard title="Numéros officiels" icon={FileText}>
               <div className="form-grid">
                 <div className="form-group">
                   <label>N° RCCM</label>
-                  <input
-                    value={form.rccm}
-                    onChange={e => setF('rccm', e.target.value)}
-                    placeholder="Ex: BF-OUA-2020-B-12345"
-                  />
+                  <input value={form.rccm} onChange={e => setF('rccm', e.target.value)} placeholder="Ex: BF-OUA-2020-B-12345" />
                 </div>
                 <div className="form-group">
                   <label>N° IFU</label>
-                  <input
-                    value={form.ifu}
-                    onChange={e => setF('ifu', e.target.value)}
-                    placeholder="Ex: 00012345678"
-                  />
+                  <input value={form.ifu} onChange={e => setF('ifu', e.target.value)} placeholder="Ex: 00012345678" />
                 </div>
                 <div className="form-group">
                   <label>N° CNSS Employeur</label>
-                  <input
-                    value={form.cnss_employeur}
-                    onChange={e => setF('cnss_employeur', e.target.value)}
-                    placeholder="Ex: 123456"
-                  />
+                  <input value={form.cnss_employeur} onChange={e => setF('cnss_employeur', e.target.value)} placeholder="Ex: 123456" />
                 </div>
               </div>
             </SectionCard>
@@ -344,118 +326,129 @@ export default function Entreprise({ onRefresh }) {
               <div className="form-grid">
                 <div className="form-group">
                   <label>Nom de la banque</label>
-                  <input
-                    value={form.banque}
-                    onChange={e => setF('banque', e.target.value)}
-                    placeholder="Ex: Banque Commerciale du Burkina"
-                  />
+                  <input value={form.banque} onChange={e => setF('banque', e.target.value)}
+                    placeholder="Ex: Banque Commerciale du Burkina" />
                 </div>
                 <div className="form-group">
                   <label>N° de compte</label>
-                  <input
-                    value={form.numero_compte}
-                    onChange={e => setF('numero_compte', e.target.value)}
-                    placeholder="Ex: BF056 01001 050122738701 65/BCB"
-                  />
+                  <input value={form.numero_compte} onChange={e => setF('numero_compte', e.target.value)}
+                    placeholder="Ex: BF056 01001 050122738701 65/BCB" />
                 </div>
               </div>
             </SectionCard>
 
-            {/* Legal representative */}
+            {/* Représentant légal */}
             <SectionCard title="Représentant légal" icon={User}>
               <div className="form-grid">
                 <div className="form-group">
                   <label>Nom et Prénom(s)</label>
-                  <input
-                    value={form.representant}
-                    onChange={e => setF('representant', e.target.value)}
-                    placeholder="Ex: OUEDRAOGO Jean"
-                  />
+                  <input value={form.representant} onChange={e => setF('representant', e.target.value)}
+                    placeholder="Ex: OUEDRAOGO Jean" />
                 </div>
                 <div className="form-group">
                   <label>Qualité / Fonction</label>
-                  <input
-                    value={form.qualite_representant}
-                    onChange={e => setF('qualite_representant', e.target.value)}
-                    placeholder="Ex: Directeur Général"
-                  />
+                  <input value={form.qualite_representant} onChange={e => setF('qualite_representant', e.target.value)}
+                    placeholder="Ex: Directeur Général" />
                 </div>
                 <div className="form-group full">
                   <label>Mention sous la signature (optionnel)</label>
-                  <input
-                    value={form.mention_signataire}
-                    onChange={e => setF('mention_signataire', e.target.value)}
-                    placeholder="Ex: Chevalier de l'Ordre de l'Étalon"
-                  />
+                  <input value={form.mention_signataire} onChange={e => setF('mention_signataire', e.target.value)}
+                    placeholder="Ex: Chevalier de l'Ordre de l'Étalon" />
                 </div>
                 <div className="form-group full">
                   <label>Pied de page des documents (optionnel)</label>
-                  <input
-                    value={form.pied_de_page}
-                    onChange={e => setF('pied_de_page', e.target.value)}
-                    placeholder="Ex: Mode de règlement / Mentions légales..."
-                  />
+                  <input value={form.pied_de_page} onChange={e => setF('pied_de_page', e.target.value)}
+                    placeholder="Ex: Mode de règlement / Mentions légales..." />
                 </div>
               </div>
             </SectionCard>
 
-            {/* Contact */}
+            {/* ════════════════════════════════
+                SIGNATAIRES
+                Chaque entrée = { role, nom }
+                Les documents récupèrent le nom par le rôle automatiquement.
+            ════════════════════════════════ */}
+            <SectionCard title="Signataires des documents" icon={User}>
+              <p style={{ fontSize: 12, color: '#737373', marginBottom: 16, marginTop: 0 }}>
+                Associez un nom à chaque rôle. Les documents PDF afficheront automatiquement
+                le nom correspondant au rôle demandé (ex. "Responsable RH").
+              </p>
+
+              {/* Liste des signataires */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                {(form.signataires || []).map((sig, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <input
+                      value={sig.role}
+                      onChange={e => updateSignataire(i, 'role', e.target.value)}
+                      placeholder="Rôle (ex : Responsable RH)"
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      value={sig.nom}
+                      onChange={e => updateSignataire(i, 'nom', e.target.value)}
+                      placeholder="Nom complet (ex : KABORE Tégawendé Azaria)"
+                      style={{ flex: 2 }}
+                    />
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => removeSignataire(i)}
+                      title="Supprimer ce signataire"
+                      style={{ flexShrink: 0 }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bouton ajout */}
+              <button className="btn btn-secondary btn-sm" onClick={addSignataire}>
+                <Plus size={13} />
+                Ajouter un signataire
+              </button>
+            </SectionCard>
+
+            {/* Contacts */}
             <SectionCard title="Contacts" icon={Phone}>
               <div className="form-grid">
                 <div className="form-group">
                   <label>Téléphone</label>
-                  <input
-                    value={form.telephone}
-                    onChange={e => setF('telephone', e.target.value)}
-                    placeholder="Ex: +226 25 00 00 00"
-                  />
+                  <input value={form.telephone} onChange={e => setF('telephone', e.target.value)}
+                    placeholder="Ex: +226 25 00 00 00" />
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={e => setF('email', e.target.value)}
-                    placeholder="Ex: contact@entreprise.bf"
-                  />
+                  <input type="email" value={form.email} onChange={e => setF('email', e.target.value)}
+                    placeholder="Ex: contact@entreprise.bf" />
                 </div>
               </div>
             </SectionCard>
           </div>
         )}
 
-        {/* ── TAB: Preview ── */}
+        {/* ── Onglet Aperçu ── */}
         {activeTab === 'preview' && (
           <div className="card">
             <div className="card-header">
               <h3>Aperçu sur les documents PDF</h3>
             </div>
             <div className="card-body">
-              <div style={{
-                border: '1px solid #E5E5E5',
-                borderRadius: 12, overflow: 'hidden',
-              }}>
-                {/* PDF header */}
+              <div style={{ border: '1px solid #E5E5E5', borderRadius: 12, overflow: 'hidden' }}>
+
+                {/* En-tête PDF */}
                 <div style={{
                   background: '#003366', padding: '16px 20px',
                   display: 'flex', alignItems: 'center', gap: 16,
                 }}>
                   {form.logo_url && (
-                    <img
-                      src={form.logo_url}
-                      alt="Logo"
-                      style={{
-                        width: 48, height: 48,
-                        objectFit: 'contain', flexShrink: 0,
-                        background: '#fff', borderRadius: 6, padding: 3,
-                      }}
-                    />
+                    <img src={form.logo_url} alt="Logo" style={{
+                      width: 48, height: 48, objectFit: 'contain', flexShrink: 0,
+                      background: '#fff', borderRadius: 6, padding: 3,
+                    }} />
                   )}
                   <div>
-                    <div style={{
-                      color: '#fff', fontWeight: 700, fontSize: 15,
-                      fontFamily: 'Poppins, sans-serif',
-                    }}>
+                    <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, fontFamily: 'Poppins, sans-serif' }}>
                       {form.nom || 'Nom de l\'entreprise'}
                     </div>
                     <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 3 }}>
@@ -463,7 +456,7 @@ export default function Entreprise({ onRefresh }) {
                         form.forme_juridique,
                         form.siege_social,
                         form.rccm ? `RCCM: ${form.rccm}` : '',
-                        form.ifu ? `IFU: ${form.ifu}` : '',
+                        form.ifu  ? `IFU: ${form.ifu}`   : '',
                         form.telephone,
                       ].filter(Boolean).join('  |  ')}
                     </div>
@@ -475,22 +468,17 @@ export default function Entreprise({ onRefresh }) {
                   </div>
                 </div>
 
-                {/* PDF body */}
+                {/* Corps PDF */}
                 <div style={{ padding: 24 }}>
                   <div style={{
-                    background: '#003366', color: '#fff',
-                    padding: '8px 16px', borderRadius: 6,
-                    textAlign: 'center', fontSize: 13,
-                    fontWeight: 700, marginBottom: 20,
-                    fontFamily: 'Poppins, sans-serif',
+                    background: '#003366', color: '#fff', padding: '8px 16px',
+                    borderRadius: 6, textAlign: 'center', fontSize: 13,
+                    fontWeight: 700, marginBottom: 20, fontFamily: 'Poppins, sans-serif',
                   }}>
                     CONTRAT À DURÉE INDÉTERMINÉE (CDI)
                   </div>
 
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1fr',
-                    gap: 10, marginBottom: 20,
-                  }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
                     {[
                       { label: 'Raison sociale',  value: form.nom },
                       { label: 'Forme juridique', value: form.forme_juridique },
@@ -499,30 +487,22 @@ export default function Entreprise({ onRefresh }) {
                       { label: 'CNSS Employeur',  value: form.cnss_employeur },
                       { label: 'Représentant',    value: form.representant },
                     ].map(row => (
-                      <div key={row.label} style={{
-                        fontSize: 12, fontFamily: 'Poppins, sans-serif',
-                      }}>
+                      <div key={row.label} style={{ fontSize: 12, fontFamily: 'Poppins, sans-serif' }}>
                         <span style={{ color: '#A3A3A3' }}>{row.label} : </span>
-                        <span style={{ fontWeight: 600, color: '#0F0F0F' }}>
-                          {row.value || '—'}
-                        </span>
+                        <span style={{ fontWeight: 600, color: '#0F0F0F' }}>{row.value || '—'}</span>
                       </div>
                     ))}
                   </div>
 
                   <div style={{
-                    padding: 10, background: '#FAFAFA',
-                    borderRadius: 6, fontSize: 11,
-                    color: '#A3A3A3', textAlign: 'center',
+                    padding: 10, background: '#FAFAFA', borderRadius: 6,
+                    fontSize: 11, color: '#A3A3A3', textAlign: 'center',
                     fontFamily: 'Poppins, sans-serif',
                   }}>
                     ... contenu du document ...
                   </div>
 
-                  <div style={{
-                    marginTop: 20,
-                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20,
-                  }}>
+                  <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     {[
                       { label: 'L\'EMPLOYEUR', mention: form.mention_signataire },
                       { label: 'L\'EMPLOYÉ(E)', mention: null },
@@ -549,12 +529,25 @@ export default function Entreprise({ onRefresh }) {
 
                   {form.pied_de_page && (
                     <div style={{
-                      marginTop: 20, paddingTop: 12,
-                      borderTop: '1px solid #E5E5E5',
-                      fontSize: 10, color: '#A3A3A3',
-                      textAlign: 'center', fontStyle: 'italic',
+                      marginTop: 20, paddingTop: 12, borderTop: '1px solid #E5E5E5',
+                      fontSize: 10, color: '#A3A3A3', textAlign: 'center', fontStyle: 'italic',
                     }}>
                       {form.pied_de_page}
+                    </div>
+                  )}
+
+                  {/* Aperçu des signataires configurés */}
+                  {(form.signataires || []).length > 0 && (
+                    <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid #E5E5E5' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#737373', marginBottom: 8 }}>
+                        Signataires configurés :
+                      </div>
+                      {(form.signataires || []).map((s, i) => (
+                        <div key={i} style={{ fontSize: 11, color: '#404040', marginBottom: 4 }}>
+                          <span style={{ color: '#A3A3A3' }}>{s.role} : </span>
+                          <span style={{ fontWeight: 600 }}>{s.nom || '—'}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
