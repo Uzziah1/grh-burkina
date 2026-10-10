@@ -155,14 +155,19 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
 
           {/* ── Infos employeur / CNSS employeur / Employé ── */}
           {/*
-            La colonne "Employeur" contient uniquement les infos de l'entreprise.
-            La date d'embauche est séparée dans la ligne suivante (rangée dédiée).
+            La colonne "Employeur" contient les infos de l'entreprise + la date d'embauche
+            sous le libellé, en gras, dans la même cellule.
           */}
           <tr>
-            {/* Colonne 1 : informations de l'entreprise (sans date d'embauche) */}
+            {/* Colonne 1 : informations de l'entreprise + date d'embauche en gras */}
             <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
               <div style={{ fontWeight: 700 }}>{nom}</div>
               {infoLignes.map((l, i) => <div key={i}>{l}</div>)}
+              {dateEmb !== '—' && (
+                <div style={{ fontWeight: 700, marginTop: 4 }}>
+                  Date d'embauche : {dateEmb}
+                </div>
+              )}
             </td>
             {/* Colonne 2 : organisme CNSS employeur */}
             <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
@@ -180,17 +185,6 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
                 </div>
               )}
             </td>
-          </tr>
-
-          {/* ── Date d'embauche — ligne séparée ── */}
-          {/*
-            Séparation demandée : les infos de l'entreprise restent dans leur cellule,
-            la date d'embauche occupe sa propre ligne pour plus de lisibilité.
-          */}
-          <tr>
-            <td style={{ ...CELL, fontStyle: 'italic', color: '#555' }}>Date d'embauche</td>
-            <td style={CELL}></td>
-            <td colSpan={2} style={{ ...CELL, fontStyle: 'italic', color: '#555' }}>{dateEmb}</td>
           </tr>
 
           {/* ── En-têtes : Emploi / Catégorie / Charges familiales / Ancienneté ── */}
