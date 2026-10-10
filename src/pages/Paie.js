@@ -756,9 +756,9 @@ export default function Paie({ agents, entreprise, profil }) {
         avancesParAgent,
       );
       if (result.count === 0) showToast('Aucun agent éligible pour cette période', 'warning');
-      else showToast(`${result.count} bulletin(s) généré(s) — PDF téléchargé`, 'success');
+      else showToast(`${result.count} bulletin(s) généré(s) et téléchargé(s)`, 'success');
     } catch (e) {
-      showToast('Erreur lors de la génération : ' + e.message, 'error');
+      showToast('Impossible de générer les bulletins. Réessayez.', 'error');
     }
     setGenerating(false);
     setGenerateProgress(null);
@@ -860,10 +860,10 @@ export default function Paie({ agents, entreprise, profil }) {
       }
 
       doc.save(`bulletins_${MOIS[filterMois - 1]}_${filterAnnee}.pdf`);
-      showToast(`${savedCount}/${eligible.length} bulletins enregistrés et PDF téléchargé`, 'success');
+      showToast(`${savedCount} bulletin(s) enregistré(s) et PDF téléchargé`, 'success');
       loadBulletins();
     } catch (e) {
-      showToast('Erreur : ' + e.message, 'error');
+      showToast('Impossible de générer les bulletins. Réessayez.', 'error');
     }
     setGenerating(false);
     setGenerateProgress(null);
@@ -923,7 +923,7 @@ export default function Paie({ agents, entreprise, profil }) {
     setF('avance_salaire', totalAvances || 0);
 
     if (avancesEnAttente.length > 0) {
-      showToast(`${avancesEnAttente.length} avance(s) approuvée(s) trouvée(s) et appliquée(s) automatiquement`, 'success');
+      showToast(`${avancesEnAttente.length} avance(s) approuvée(s) appliquée(s) automatiquement`, 'success');
     }
   }
 
@@ -975,7 +975,7 @@ export default function Paie({ agents, entreprise, profil }) {
       .select()
       .single();
 
-    if (error) showToast('Erreur lors de l\'enregistrement : ' + error.message, 'error');
+    if (error) showToast('L\'enregistrement a échoué. Réessayez.', 'error');
     else {
       // Mark the linked advances as deducted by this bulletin
       if (avancesAgent.length > 0 && savedBulletin?.id) {
@@ -985,7 +985,7 @@ export default function Paie({ agents, entreprise, profil }) {
           .in('id', avancesAgent.map(a => a.id));
       }
 
-      showToast(statut === 'Validé' ? 'Bulletin validé !' : 'Bulletin sauvegardé');
+      showToast(statut === 'Validé' ? 'Bulletin validé avec succès' : 'Bulletin sauvegardé avec succès');
       setModal(false);
       setForm({
         agent_id: '', mois: NOW.getMonth() + 1, annee: NOW.getFullYear(),
@@ -1006,7 +1006,7 @@ export default function Paie({ agents, entreprise, profil }) {
     if (!window.confirm('Supprimer ce bulletin ? Les avances liées seront réinitialisées.')) return;
     await supabase.from('avances').update({ deduite_bulletin_id: null }).eq('deduite_bulletin_id', id);
     await supabase.from('bulletins_paie').delete().eq('id', id);
-    showToast('Bulletin supprimé');
+    showToast('Bulletin de paie supprimé');
     loadBulletins();
   }
 
@@ -1017,7 +1017,7 @@ export default function Paie({ agents, entreprise, profil }) {
     const ids = bulletins.map(b => b.id);
     await supabase.from('avances').update({ deduite_bulletin_id: null }).in('deduite_bulletin_id', ids);
     await supabase.from('bulletins_paie').delete().in('id', ids);
-    showToast(`${ids.length} bulletin(s) supprimé(s)`);
+    showToast(`${ids.length} bulletin(s) supprimé(s) avec succès`);
     loadBulletins();
   }
 

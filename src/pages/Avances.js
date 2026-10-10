@@ -47,16 +47,16 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   // ── Génération du document de demande d'avance ─────────
   async function handleGenerateDoc(avance) {
     const agent = agents.find(a => a.id === avance.agent_id);
-    if (!agent) { showToast('Agent introuvable', 'error'); return; }
+    if (!agent) { showToast('Agent introuvable. Actualisez la page.', 'error'); return; }
     if (!entreprise || !entreprise.nom) {
-      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      showToast('Configurez d\'abord les informations de l\'entreprise', 'error');
       return;
     }
     try {
       await generateAvance(agent, entreprise, avance);
-      showToast('Document généré et téléchargé');
+      showToast('Document PDF téléchargé avec succès');
     } catch (e) {
-      showToast('Erreur lors de la génération', 'error');
+      showToast('Impossible de générer le document. Réessayez.', 'error');
     }
   }
 
@@ -71,7 +71,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
     if (!form.agent_id || !form.montant) {
-      showToast('Agent et montant sont obligatoires', 'error');
+      showToast('Veuillez sélectionner un agent et saisir le montant', 'error');
       return;
     }
     setLoading(true);
@@ -82,9 +82,9 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
       motif:        form.motif || null,
     });
     if (error) {
-      showToast('Erreur lors de l\'enregistrement', 'error');
+      showToast('L\'enregistrement a échoué. Réessayez.', 'error');
     } else {
-      showToast('Demande d\'avance enregistrée');
+      showToast('Demande d\'avance enregistrée avec succès');
       setModal(false);
       setForm({
         agent_id: '', montant: '',
@@ -99,8 +99,8 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   // ── Mise à jour du statut (approbation / refus) ───────
   async function updateStatut(id, statut) {
     const { error } = await supabase.from('avances').update({ statut }).eq('id', id);
-    if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
-    showToast(`Demande ${statut.toLowerCase()}`);
+    if (error) { showToast('Impossible de mettre à jour la demande. Réessayez.', 'error'); return; }
+    showToast(statut === 'Approuvé' ? 'Demande approuvée' : statut === 'Rejeté' ? 'Demande rejetée' : 'Statut mis à jour');
     onRefresh();
   }
 
@@ -108,7 +108,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('avances').delete().eq('id', id);
-    showToast('Demande supprimée');
+    showToast('Demande d\'avance supprimée');
     onRefresh();
   }
 

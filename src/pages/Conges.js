@@ -76,16 +76,16 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   // ── Génération du PDF d'autorisation de congé ──────────
   async function handleGenerateDoc(conge) {
     const agent = agents.find(a => a.id === conge.agent_id);
-    if (!agent) { showToast('Agent introuvable', 'error'); return; }
+    if (!agent) { showToast('Agent introuvable. Actualisez la page.', 'error'); return; }
     if (!entreprise || !entreprise.nom) {
-      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      showToast('Configurez d\'abord les informations de l\'entreprise', 'error');
       return;
     }
     try {
       await generateConge(agent, entreprise, conge);
-      showToast('Document généré et téléchargé');
+      showToast('Document PDF téléchargé avec succès');
     } catch (e) {
-      showToast('Erreur lors de la génération', 'error');
+      showToast('Impossible de générer le document. Réessayez.', 'error');
     }
   }
 
@@ -100,7 +100,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
     if (!form.agent_id || !form.date_debut || !form.date_fin) {
-      showToast('Agent, date début et date fin sont obligatoires', 'error');
+      showToast('Veuillez sélectionner un agent et les dates de congé', 'error');
       return;
     }
     setLoading(true);
@@ -112,9 +112,9 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
       motif:        form.motif || null,
     });
     if (error) {
-      showToast('Erreur lors de l\'enregistrement', 'error');
+      showToast('L\'enregistrement a échoué. Réessayez.', 'error');
     } else {
-      showToast('Demande de congé enregistrée');
+      showToast('Demande de congé enregistrée avec succès');
       setModal(false);
       setForm({ agent_id: '', date_debut: '', date_fin: '', nombre_jours: '', motif: 'Congé annuel payé' });
       onRefresh();
@@ -125,8 +125,8 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   // ── Mise à jour du statut (approbation / refus) ───────
   async function updateStatut(id, statut) {
     const { error } = await supabase.from('conges').update({ statut }).eq('id', id);
-    if (error) { showToast(`Erreur : ${error.message}`, 'error'); return; }
-    showToast(`Demande ${statut.toLowerCase()}`);
+    if (error) { showToast('Impossible de mettre à jour la demande. Réessayez.', 'error'); return; }
+    showToast(statut === 'Approuvé' ? 'Congé approuvé' : statut === 'Rejeté' ? 'Congé rejeté' : 'Statut mis à jour');
     onRefresh();
   }
 
@@ -134,7 +134,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('conges').delete().eq('id', id);
-    showToast('Demande supprimée');
+    showToast('Demande de congé supprimée');
     onRefresh();
   }
 

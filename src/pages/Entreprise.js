@@ -119,10 +119,10 @@ export default function Entreprise({ onRefresh }) {
     const ext      = file.name.split('.').pop();
     const filename = `logo_${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('logos').upload(filename, file, { upsert: true });
-    if (error) { showToast('Erreur lors de l\'upload du logo', 'error'); setUploading(false); return; }
+    if (error) { showToast('Impossible d\'envoyer le logo. Vérifiez votre connexion.', 'error'); setUploading(false); return; }
     const { data } = supabase.storage.from('logos').getPublicUrl(filename);
     setF('logo_url', data.publicUrl);
-    showToast('Logo uploadé avec succès');
+    showToast('Logo mis à jour avec succès');
     setUploading(false);
   }
 
@@ -157,9 +157,9 @@ export default function Entreprise({ onRefresh }) {
 
     if (error) {
       console.error('Erreur sauvegarde entreprise :', error);
-      showToast(`Erreur : ${error.message}`, 'error');
+      showToast('La sauvegarde a échoué. Réessayez.', 'error');
     } else {
-      showToast('Informations sauvegardées avec succès');
+      showToast('Informations de l\'entreprise sauvegardées');
       if (!id) loadEntreprise();
       onRefresh();
     }

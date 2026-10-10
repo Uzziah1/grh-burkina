@@ -21,7 +21,7 @@ export default function Login({ onLogin, inviteMode = false }) {
     setError('');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError('Email ou mot de passe incorrect');
+      setError('Email ou mot de passe incorrect. Vérifiez vos identifiants.');
       setLoading(false);
       return;
     }
@@ -32,18 +32,18 @@ export default function Login({ onLogin, inviteMode = false }) {
   async function handleSetPassword(e) {
     e.preventDefault();
     if (password !== password2) {
-      setError('Les mots de passe ne correspondent pas');
+      setError('Les deux mots de passe ne correspondent pas. Vérifiez et réessayez.');
       return;
     }
     if (password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+      setError('Le mot de passe doit faire au moins 6 caractères.');
       return;
     }
     setLoading(true);
     setError('');
     const { data, error } = await supabase.auth.updateUser({ password });
     if (error) {
-      setError(error.message || 'Erreur lors de la mise à jour du mot de passe');
+      setError('Impossible de définir le mot de passe. Le lien a peut-être expiré.');
       setLoading(false);
       return;
     }

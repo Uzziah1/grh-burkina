@@ -145,7 +145,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   // ── Save agent ──
   async function handleSubmit() {
     if (!form.nom || !form.prenom || !form.poste) {
-      showToast('Nom, prénom et poste sont obligatoires', 'error');
+      showToast('Veuillez renseigner le nom, le prénom et le poste', 'error');
       return;
     }
     setLoading(true);
@@ -186,12 +186,12 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     };
     if (editAgent) {
       const { error } = await supabase.from('agents').update(data).eq('id', editAgent.id);
-      if (error) showToast(`Erreur modification : ${error.message}`, 'error');
-      else { showToast('Agent modifié avec succès'); setModal(false); onRefresh(); }
+      if (error) showToast('Impossible de modifier l\'agent. Réessayez.', 'error');
+      else { showToast('Agent mis à jour avec succès'); setModal(false); onRefresh(); }
     } else {
       const { error } = await supabase.from('agents').insert(data);
-      if (error) showToast(`Erreur ajout : ${error.message}`, 'error');
-      else { showToast('Agent ajouté avec succès'); setModal(false); onRefresh(); }
+      if (error) showToast('Impossible d\'ajouter l\'agent. Réessayez.', 'error');
+      else { showToast('Agent ajouté avec succès 🎉'); setModal(false); onRefresh(); }
     }
     setLoading(false);
   }
@@ -200,7 +200,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cet agent ? Cette action est irréversible.')) return;
     await supabase.from('agents').delete().eq('id', id);
-    showToast('Agent supprimé');
+    showToast('Agent supprimé avec succès');
     onRefresh();
   }
 
@@ -211,8 +211,8 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     setDeleting(true);
     const ids = [...selected];
     const { error } = await supabase.from('agents').delete().in('id', ids);
-    if (error) showToast('Erreur lors de la suppression', 'error');
-    else { showToast(`${ids.length} agent(s) supprimé(s)`); setSelected(new Set()); onRefresh(); }
+    if (error) showToast('La suppression a échoué. Réessayez.', 'error');
+    else { showToast(`${ids.length} agent(s) supprimé(s) avec succès`); setSelected(new Set()); onRefresh(); }
     setDeleting(false);
   }
 
@@ -237,7 +237,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   // ── Generate document ──
   async function generateDoc(type, a) {
     if (!entreprise || !entreprise.nom) {
-      showToast('Veuillez configurer les informations de l\'entreprise', 'error');
+      showToast('Configurez d\'abord les informations de l\'entreprise', 'error');
       return;
     }
     try {
@@ -246,10 +246,10 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       else if (type === 'attestation') await generateAttestation(a, entreprise);
       else if (type === 'conge')   await generateConge(a, entreprise);
       else if (type === 'avance')  await generateAvance(a, entreprise);
-      showToast('PDF généré et téléchargé');
+      showToast('Contrat PDF téléchargé avec succès');
       setDocModal(null);
     } catch (e) {
-      showToast('Erreur lors de la génération du PDF', 'error');
+      showToast('Impossible de générer le PDF. Réessayez.', 'error');
     }
   }
 
@@ -326,10 +326,10 @@ function exportExcel() {
     wb.SheetNames.push('Agents');
     wb.Sheets['Agents'] = ws;
     XLSX.writeFile(wb, 'agents_export.xlsx');
-    showToast('Export Excel téléchargé');
+    showToast('Fichier Excel téléchargé avec succès');
   } catch (e) {
     console.error('Export error:', e);
-    showToast('Erreur lors de l\'export', 'error');
+    showToast('L\'export a échoué. Réessayez.', 'error');
   }
 }
 
@@ -443,8 +443,8 @@ function importExcel(file) {
     }
 
     if (ok > 0)    showToast(`${ok} agent(s) importé(s) avec succès`);
-    if (errors > 0) showToast(`${errors} ligne(s) en erreur — vérifiez la console`, 'warning');
-    if (ok === 0 && errors === 0) showToast('Aucun agent importé — vérifiez les colonnes', 'warning');
+    if (errors > 0) showToast(`${errors} ligne(s) ignorée(s) — vérifiez le format du fichier`, 'warning');
+    if (ok === 0 && errors === 0) showToast('Aucun agent importé — vérifiez que les colonnes sont correctes', 'warning');
 
     onRefresh();
   };
@@ -853,7 +853,7 @@ function importExcel(file) {
                       .replace(/_+/g, '_');                              // dédouble les underscores
                     const path = `agents/${Date.now()}_${safeName}`;
                     const { error } = await sb.storage.from('photos').upload(path, file, { upsert: true });
-                    if (error) { alert('Erreur upload photo : ' + error.message); return; }
+                    if (error) { alert('Impossible d\'envoyer la photo. Vérifiez votre connexion.'); return; }
                     const { data: urlData } = sb.storage.from('photos').getPublicUrl(path);
                     setF('photo_url', urlData.publicUrl);
                   }}
@@ -1011,7 +1011,7 @@ function importExcel(file) {
             className="btn btn-primary"
             onClick={() => {
               if (step === 1 && (!form.nom || !form.prenom)) {
-                showToast('Nom et prénom sont obligatoires', 'error');
+                showToast('Veuillez renseigner le nom et le prénom', 'error');
                 return;
               }
               setStep(step + 1);

@@ -145,11 +145,11 @@ export default function Documents({ agents, entreprise }) {
   // ── Generate PDF document ──
   async function handleGenerate(type) {
     if (!agent) {
-      showToast('Veuillez sélectionner un agent', 'error');
+      showToast('Veuillez sélectionner un agent avant de continuer', 'error');
       return;
     }
     if (!entreprise || !entreprise.nom) {
-      showToast('Veuillez d\'abord configurer les informations de l\'entreprise', 'error');
+      showToast('Configurez d\'abord les informations de l\'entreprise', 'error');
       return;
     }
     setGenerating(type);
@@ -159,9 +159,9 @@ export default function Documents({ agents, entreprise }) {
       else if (type === 'attestation')         await generateAttestation(agent, entreprise);
       else if (type === 'autorisation_absence') await generateAutorisationAbsence(agent, entreprise);
       else if (type === 'autorisation')         await generateAutorisation(agent, entreprise);
-      showToast('PDF généré et téléchargé avec succès');
+      showToast('Document PDF téléchargé avec succès');
     } catch (e) {
-      showToast('Erreur lors de la génération du PDF', 'error');
+      showToast('Impossible de générer le PDF. Réessayez.', 'error');
     }
     setGenerating(null);
   }

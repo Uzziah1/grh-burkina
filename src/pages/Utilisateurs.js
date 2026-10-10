@@ -137,7 +137,7 @@ export default function Utilisateurs({ profil }) {
   // ── Invitation d'un nouvel utilisateur ────────────────
   async function handleInviter() {
     if (!form.email || !form.role) {
-      showToast('Email et rôle sont obligatoires', 'error');
+      showToast('Veuillez renseigner l\'adresse email et le rôle', 'error');
       return;
     }
     setSending(true);
@@ -157,15 +157,15 @@ export default function Utilisateurs({ profil }) {
       );
       const json = await res.json();
       if (!res.ok) {
-        showToast(json.error || 'Erreur lors de l\'invitation', 'error');
+        showToast(json.error || "Impossible d'envoyer l'invitation. Réessayez.", 'error');
       } else {
-        showToast(`Invitation envoyée à ${form.email}`);
+        showToast(`Invitation envoyée à ${form.email} avec succès`);
         setModal(false);
         setForm({ email: '', prenom: '', nom: '', role: 'rh' });
         loadUtilisateurs();
       }
     } catch {
-      showToast('Erreur réseau', 'error');
+      showToast('Problème de connexion. Vérifiez votre réseau.', 'error');
     }
     setSending(false);
   }
@@ -173,14 +173,14 @@ export default function Utilisateurs({ profil }) {
   // ── Mise à jour du rôle ───────────────────────────────
   async function handleUpdateRole(id, role) {
     await supabase.from('profils').update({ role }).eq('id', id);
-    showToast('Rôle mis à jour');
+    showToast('Rôle mis à jour avec succès');
     loadUtilisateurs();
   }
 
   // ── Activation / désactivation ────────────────────────
   async function handleToggleActif(id, actif) {
     await supabase.from('profils').update({ actif: !actif }).eq('id', id);
-    showToast(!actif ? 'Utilisateur activé' : 'Utilisateur désactivé');
+    showToast(!actif ? 'Compte activé avec succès' : 'Compte désactivé avec succès');
     loadUtilisateurs();
   }
 
