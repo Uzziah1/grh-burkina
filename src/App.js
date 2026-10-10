@@ -148,7 +148,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // Si l'utilisateur vient de définir son mot de passe, le connecter
-      if (event === 'USER_UPDATED' && needsPassword) {
+      if (event === 'USER_UPDATED') {
         setNeedsPassword(false);
         const u = session?.user ?? null;
         setUser(u);
@@ -170,7 +170,7 @@ export default function App() {
       }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (user) loadData();

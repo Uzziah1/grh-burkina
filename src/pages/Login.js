@@ -2,7 +2,7 @@
 // Full-screen video background with white gradient overlay
 // Gère aussi le flux d'invitation (type=invite) pour définir le mot de passe
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Mail, Lock, LogIn, Eye, EyeOff, KeyRound } from 'lucide-react';
 
