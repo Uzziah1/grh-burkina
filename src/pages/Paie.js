@@ -567,7 +567,7 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   doc.text(nomComplet, 163, y + 4, { align: 'center' });
 }
 
-async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress) {
+async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress, avancesParAgent = {}) {
   // Filter agents eligible for payroll: not VDP/Stagiaire, embauche ≤ first of month
   const firstOfMonth = new Date(annee, mois - 1, 1);
   const eligible = (agents || []).filter(a => {
@@ -586,6 +586,8 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
     if (i > 0) doc.addPage();
     onProgress && onProgress(i + 1, eligible.length, agent);
 
+    const avanceAgent = avancesParAgent[agent.id] || 0;
+
     const calc = calculerBulletin({
       salaire_base:         agent.salaire_brut || 0,
       sursalaire:           agent.sursalaire || 0,
@@ -596,7 +598,7 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
       autres_primes:        0,
       heures_sup:           0,
       autres_retenues:      0,
-      avance_salaire:                 0,
+      avance_salaire:                 avanceAgent,
       charges_familiales:             agent.charges_familiales || 0,
       categorie_socioprofessionnelle: agent.categorie_socioprofessionnelle || '',
     });
@@ -609,7 +611,7 @@ async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onPr
       indemnite_transport:  agent.indemnite_transport || 0,
       indemnite_fonction:   agent.indemnite_fonction || 0,
       prime_anciennete: 0, autres_primes: 0, heures_sup: 0,
-      autres_retenues: 0,  avance_salaire: 0,
+      autres_retenues: 0,  avance_salaire: avanceAgent,
       ...calc,
     };
 
@@ -736,9 +738,23 @@ export default function Paie({ agents, entreprise, profil }) {
     setGenerating(true);
     setGenerateProgress({ current: 0, total: 0, nom: '' });
     try {
+      // Charger les avances approuvées du mois pour tous les agents
+      const { data: avancesData } = await supabase
+        .from('avances')
+        .select('agent_id, montant')
+        .eq('statut', 'Approuvé')
+        .eq('mois', filterMois)
+        .eq('annee', filterAnnee);
+      // Regrouper par agent_id → total des avances
+      const avancesParAgent = {};
+      (avancesData || []).forEach(a => {
+        avancesParAgent[a.agent_id] = (avancesParAgent[a.agent_id] || 0) + (parseFloat(a.montant) || 0);
+      });
+
       const result = await generateBulletinsGroupesPDF(
         filterMois, filterAnnee, agents, entreprise,
         (current, total, agent) => setGenerateProgress({ current, total, nom: `${agent.prenom} ${agent.nom}` }),
+        avancesParAgent,
       );
       if (result.count === 0) showToast('Aucun agent éligible pour cette période', 'warning');
       else showToast(`${result.count} bulletin(s) généré(s) — PDF téléchargé`, 'success');
