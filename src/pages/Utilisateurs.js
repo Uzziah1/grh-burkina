@@ -1,11 +1,12 @@
-// Utilisateurs.js - User management page
-// Features: view users, change roles, activate/deactivate
+// Utilisateurs.js — Gestion des utilisateurs
+// Fonctionnalités : liste, changement de rôle, activation/désactivation,
+//                  invitation par email (Edge Function invite-user)
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   UserCog, Shield, Users, Briefcase,
-  ToggleLeft, ToggleRight, ExternalLink, Crown,
+  ToggleLeft, ToggleRight, Crown, Plus, X, Send,
 } from 'lucide-react';
 
 // ── Toast notification ────────────────────────────────────
@@ -51,6 +52,7 @@ const ROLES = {
       'Gestion des congés et avances',
       '✗ Gestion des utilisateurs',
       '✗ Configuration entreprise',
+      '✗ Fiche entreprise',
     ],
   },
   comptable: {
@@ -113,12 +115,17 @@ function PermissionsList({ role }) {
   );
 }
 
-// ── Main Utilisateurs component ───────────────────────────
+// ── Composant principal Utilisateurs ─────────────────────
 export default function Utilisateurs({ profil }) {
   const [utilisateurs, setUtilisateurs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
+  const [modal, setModal]               = useState(false);
+  const [sending, setSending]           = useState(false);
+  const [form, setForm] = useState({ email: '', prenom: '', nom: '', role: 'rh' });
 
   useEffect(() => { loadUtilisateurs(); }, []);
+
+  function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
 
   async function loadUtilisateurs() {
     setLoading(true);
@@ -127,14 +134,50 @@ export default function Utilisateurs({ profil }) {
     setLoading(false);
   }
 
-  // ── Update user role ──
+  // ── Invitation d'un nouvel utilisateur ────────────────
+  async function handleInviter() {
+    if (!form.email || !form.role) {
+      showToast('Email et rôle sont obligatoires', 'error');
+      return;
+    }
+    setSending(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/invite-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': process.env.REACT_APP_SUPABASE_KEY,
+          },
+          body: JSON.stringify(form),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        showToast(json.error || 'Erreur lors de l\'invitation', 'error');
+      } else {
+        showToast(`Invitation envoyée à ${form.email}`);
+        setModal(false);
+        setForm({ email: '', prenom: '', nom: '', role: 'rh' });
+        loadUtilisateurs();
+      }
+    } catch {
+      showToast('Erreur réseau', 'error');
+    }
+    setSending(false);
+  }
+
+  // ── Mise à jour du rôle ───────────────────────────────
   async function handleUpdateRole(id, role) {
     await supabase.from('profils').update({ role }).eq('id', id);
     showToast('Rôle mis à jour');
     loadUtilisateurs();
   }
 
-  // ── Toggle user active status ──
+  // ── Activation / désactivation ────────────────────────
   async function handleToggleActif(id, actif) {
     await supabase.from('profils').update({ actif: !actif }).eq('id', id);
     showToast(!actif ? 'Utilisateur activé' : 'Utilisateur désactivé');
@@ -205,18 +248,12 @@ export default function Utilisateurs({ profil }) {
             <h3>Utilisateurs ({utilisateurs.length})</h3>
           </div>
 
-          {/* Link to Supabase to add users */}
+          {/* Bouton invitation (admin uniquement) */}
           {profil?.role === 'admin' && (
-            
-             <a href="https://supabase.com/dashboard/project/scbncfieuetgclmlodmw/auth/users"
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary btn-sm"
-              style={{ textDecoration: 'none' }}
-            >
-              <ExternalLink size={14} />
-              Ajouter dans Supabase
-            </a>
+            <button className="btn btn-primary btn-sm" onClick={() => setModal(true)}>
+              <Plus size={14} />
+              Inviter un utilisateur
+            </button>
           )}
         </div>
 
@@ -320,6 +357,84 @@ export default function Utilisateurs({ profil }) {
           </tbody>
         </table>
       </div>
+
+      {/* ════════════════════════════════
+          MODAL : Invitation utilisateur
+      ════════════════════════════════ */}
+      {modal && (
+        <div className="modal-overlay" onClick={e => {
+          if (e.target === e.currentTarget) setModal(false);
+        }}>
+          <div className="modal" style={{ width: 480 }}>
+            <div className="modal-header">
+              <h3>Inviter un utilisateur</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setModal(false)}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 12, color: '#737373', marginBottom: 16, marginTop: 0 }}>
+                Un email d'invitation sera envoyé à l'adresse indiquée. L'utilisateur
+                pourra définir son mot de passe via le lien reçu.
+              </p>
+              <div className="form-grid">
+
+                {/* Email */}
+                <div className="form-group full">
+                  <label>Adresse email *</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={e => setF('email', e.target.value)}
+                    placeholder="exemple@email.com"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Prénom */}
+                <div className="form-group">
+                  <label>Prénom</label>
+                  <input
+                    value={form.prenom}
+                    onChange={e => setF('prenom', e.target.value)}
+                    placeholder="Ex : Tégawendé"
+                  />
+                </div>
+
+                {/* Nom */}
+                <div className="form-group">
+                  <label>Nom</label>
+                  <input
+                    value={form.nom}
+                    onChange={e => setF('nom', e.target.value)}
+                    placeholder="Ex : KABORE"
+                  />
+                </div>
+
+                {/* Rôle */}
+                <div className="form-group full">
+                  <label>Rôle *</label>
+                  <select value={form.role} onChange={e => setF('role', e.target.value)}>
+                    <option value="admin">Administrateur — accès complet</option>
+                    <option value="rh">Responsable RH — gestion agents, congés, paie</option>
+                    <option value="comptable">Comptable — consultation et avances</option>
+                  </select>
+                </div>
+
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setModal(false)}>
+                Annuler
+              </button>
+              <button className="btn btn-primary" onClick={handleInviter} disabled={sending}>
+                <Send size={14} />
+                {sending ? 'Envoi en cours...' : 'Envoyer l\'invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

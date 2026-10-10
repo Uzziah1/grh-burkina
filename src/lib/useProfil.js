@@ -56,7 +56,7 @@ export const permissions = {
     voirDocuments: true,
     voirUtilisateurs: false,
     modifierUtilisateurs: false,
-    voirEntreprise: true,
+    voirEntreprise: false,      // Le RH ne voit pas la config entreprise
     modifierEntreprise: false,
   },
   comptable: {
