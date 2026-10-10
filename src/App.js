@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useProfil } from './lib/useProfil';
 import Login from './pages/Login';
@@ -107,6 +108,48 @@ function SkeletonApp() {
   );
 }
 
+// ── FicheWrapper : reads :agentId from URL ───────────────────
+function FicheWrapper({ agents, entreprise, profil }) {
+  const { agentId } = useParams();
+  const navigate = useNavigate();
+  return (
+    <FicheAgent
+      agentId={agentId}
+      entreprise={entreprise}
+      onBack={() => navigate('/agents')}
+      profil={profil}
+    />
+  );
+}
+
+// ── AppRoutes : routes internes (user connecté) ──────────────
+function AppRoutes({ user, profil, agents, conges, avances, entreprise, loadData }) {
+  const navigate = useNavigate();
+  const openFiche = (id) => navigate(`/agents/${id}`);
+
+  return (
+    <Layout user={user} profil={profil} onLogout={() => supabase.auth.signOut()}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard agents={agents} onOpenFiche={openFiche} />} />
+        <Route path="/agents" element={<Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} />} />
+        <Route path="/agents/:agentId" element={<FicheWrapper agents={agents} entreprise={entreprise} profil={profil} />} />
+        <Route path="/contrats" element={<Contrats agents={agents} onOpenFiche={openFiche} />} />
+        <Route path="/conges" element={<Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
+        <Route path="/avances" element={<Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
+        <Route path="/paie" element={<Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
+        <Route path="/etat-salaires" element={<EtatSalaires entreprise={entreprise} profil={profil} />} />
+        <Route path="/documents" element={<Documents agents={agents} entreprise={entreprise} profil={profil} />} />
+        <Route path="/badges" element={<Badge agents={agents} entreprise={entreprise} />} />
+        <Route path="/historique" element={<Historique />} />
+        <Route path="/entreprise" element={<Entreprise onRefresh={loadData} />} />
+        <Route path="/utilisateurs" element={<Utilisateurs profil={profil} />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Layout>
+  );
+}
+
 export default function App() {
   // Pré-charger depuis le cache local pour éviter l'écran blanc au retour
   const [user, setUser] = useState(() => {
@@ -115,12 +158,10 @@ export default function App() {
       return cached ? JSON.parse(cached) : null;
     } catch { return null; }
   });
-  const [page, setPage] = useState('dashboard');
   const [agents, setAgents] = useState([]);
   const [conges, setConges] = useState([]);
   const [avances, setAvances] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
-  const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [loading, setLoading] = useState(true);
   // true = l'utilisateur vient de cliquer sur un lien d'invitation et doit définir son mdp
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -175,7 +216,7 @@ export default function App() {
 
   useEffect(() => {
     if (user) loadData();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
     const [a, cg, av, ent] = await Promise.all([
@@ -190,37 +231,24 @@ export default function App() {
     setEntreprise(ent.data || {});
   }
 
-  function openFiche(agentId) {
-    setSelectedAgentId(agentId);
-    setPage('fiche');
-  }
-
   if (loading || profilLoading) return <SkeletonApp />;
 
   // Flux d'invitation : afficher le formulaire de définition de mot de passe
-  if (needsPassword) return <Login onLogin={setUser} inviteMode />;
+  if (needsPassword) return <BrowserRouter><Login onLogin={setUser} inviteMode /></BrowserRouter>;
 
-  if (!user) return <Login onLogin={setUser} />;
-
-  // Toutes les pages sont montées une seule fois et masquées/affichées par CSS
-  // pour que les états (modaux ouverts, formulaires en cours) survivent aux changements de page
-  const show = id => ({ display: page === id ? 'contents' : 'none' });
+  if (!user) return <BrowserRouter><Login onLogin={setUser} /></BrowserRouter>;
 
   return (
-    <Layout page={page} setPage={setPage} user={user} profil={profil} onLogout={() => supabase.auth.signOut()}>
-      <div style={show('dashboard')}><Dashboard agents={agents} onOpenFiche={openFiche} /></div>
-      <div style={show('agents')}><Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} /></div>
-      <div style={show('contrats')}><Contrats agents={agents} onOpenFiche={openFiche} /></div>
-      <div style={show('conges')}><Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
-      <div style={show('avances')}><Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
-      <div style={show('paie')}><Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} /></div>
-      <div style={show('documents')}><Documents agents={agents} entreprise={entreprise} profil={profil} /></div>
-      <div style={show('badges')}><Badge agents={agents} entreprise={entreprise} /></div>
-      <div style={show('etatSalaires')}><EtatSalaires entreprise={entreprise} profil={profil} /></div>
-      <div style={show('historique')}><Historique /></div>
-      <div style={show('entreprise')}><Entreprise onRefresh={loadData} /></div>
-      <div style={show('fiche')}><FicheAgent agentId={selectedAgentId} entreprise={entreprise} onBack={() => setPage('agents')} profil={profil} /></div>
-      <div style={show('utilisateurs')}><Utilisateurs profil={profil} /></div>
-    </Layout>
+    <BrowserRouter>
+      <AppRoutes
+        user={user}
+        profil={profil}
+        agents={agents}
+        conges={conges}
+        avances={avances}
+        entreprise={entreprise}
+        loadData={loadData}
+      />
+    </BrowserRouter>
   );
 }

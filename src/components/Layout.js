@@ -3,6 +3,7 @@
 // Features: collapsible sidebar with tooltips, user avatar dropdown in topbar
 
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
@@ -15,39 +16,44 @@ const APP_VERSION = 'v1.0.0';
 
 // ── Navigation items ──────────────────────────────────────
 const mainNavItems = [
-  { id: 'dashboard',    label: 'Tableau de bord', permission: null,               icon: LayoutDashboard },
-  { id: 'agents',       label: 'Agents',           permission: 'voirAgents',       icon: Users },
-  { id: 'contrats',     label: 'Contrats',         permission: 'voirContrats',     icon: FileText },
-  { id: 'conges',       label: 'Congés',           permission: 'voirConges',       icon: Calendar },
-  { id: 'avances',      label: 'Avances salaire',  permission: 'voirAvances',      icon: DollarSign },
-  { id: 'paie',         label: 'Paie',             permission: 'voirPaie',         icon: Banknote },
-{ id: 'etatSalaires',  label: 'État des salaires', permission: 'voirEtatSalaires', icon: ClipboardList },
-  { id: 'documents',    label: 'Documents',        permission: 'voirDocuments',    icon: FolderOpen },
-  { id: 'badges',       label: 'Badges',           permission: 'voirDocuments',    icon: CreditCard },
-  { id: 'historique',   label: 'Journalisation',   permission: 'voirAgents',       icon: History },
+  { id: 'dashboard',    path: '/dashboard',      label: 'Tableau de bord',   permission: null,               icon: LayoutDashboard },
+  { id: 'agents',       path: '/agents',         label: 'Agents',            permission: 'voirAgents',       icon: Users },
+  { id: 'contrats',     path: '/contrats',       label: 'Contrats',          permission: 'voirContrats',     icon: FileText },
+  { id: 'conges',       path: '/conges',         label: 'Congés',            permission: 'voirConges',       icon: Calendar },
+  { id: 'avances',      path: '/avances',        label: 'Avances salaire',   permission: 'voirAvances',      icon: DollarSign },
+  { id: 'paie',         path: '/paie',           label: 'Paie',              permission: 'voirPaie',         icon: Banknote },
+  { id: 'etatSalaires', path: '/etat-salaires',  label: 'État des salaires', permission: 'voirEtatSalaires', icon: ClipboardList },
+  { id: 'documents',    path: '/documents',      label: 'Documents',         permission: 'voirDocuments',    icon: FolderOpen },
+  { id: 'badges',       path: '/badges',         label: 'Badges',            permission: 'voirDocuments',    icon: CreditCard },
+  { id: 'historique',   path: '/historique',     label: 'Journalisation',    permission: 'voirAgents',       icon: History },
 ];
 
 const settingsNavItems = [
-  { id: 'utilisateurs', label: 'Utilisateurs',     permission: 'voirUtilisateurs', icon: UserCog },
-  { id: 'entreprise',   label: 'Entreprise',       permission: 'voirEntreprise',   icon: Building2 },
+  { id: 'utilisateurs', path: '/utilisateurs',   label: 'Utilisateurs',      permission: 'voirUtilisateurs', icon: UserCog },
+  { id: 'entreprise',   path: '/entreprise',     label: 'Entreprise',        permission: 'voirEntreprise',   icon: Building2 },
 ];
 
 // ── Page titles ───────────────────────────────────────────
 const pageTitles = {
-  dashboard:    'Tableau de bord',
-  agents:       'Gestion des agents',
-  contrats:     'Suivi des contrats',
-  conges:       'Congés',
-  avances:      'Avances sur salaire',
-  paie:         'Bulletins de paie',
-  etatSalaires: 'État des salaires',
-  documents:    'Documents',
-  badges:       'Badges agents',
-  entreprise:   'Mon Entreprise',
-  utilisateurs: 'Gestion des utilisateurs',
-  historique:   'Historique des modifications',
-  fiche:        'Fiche agent',
+  '/dashboard':      'Tableau de bord',
+  '/agents':         'Gestion des agents',
+  '/contrats':       'Suivi des contrats',
+  '/conges':         'Congés',
+  '/avances':        'Avances sur salaire',
+  '/paie':           'Bulletins de paie',
+  '/etat-salaires':  'État des salaires',
+  '/documents':      'Documents',
+  '/badges':         'Badges agents',
+  '/entreprise':     'Mon Entreprise',
+  '/utilisateurs':   'Gestion des utilisateurs',
+  '/historique':     'Historique des modifications',
 };
+
+function getPageTitle(pathname) {
+  // Handle /agents/:id
+  if (pathname.startsWith('/agents/')) return 'Fiche agent';
+  return pageTitles[pathname] || 'RH Manager';
+}
 
 // ── Role display helper ───────────────────────────────────
 function getRoleInfo(role) {
@@ -60,14 +66,15 @@ function getRoleInfo(role) {
 }
 
 // ── NavItem component ─────────────────────────────────────
-function NavItem({ item, isActive, onClick, collapsed }) {
+function NavItem({ item, isActive, collapsed }) {
+  const navigate = useNavigate();
   const Icon = item.icon;
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
     <div style={{ position: 'relative' }}>
       <div
-        onClick={() => onClick(item.id)}
+        onClick={() => navigate(item.path)}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         style={{
@@ -125,8 +132,6 @@ function NavItem({ item, isActive, onClick, collapsed }) {
 }
 
 // ── User avatar dropdown (topbar) ─────────────────────────
-// Hover zone stays continuous between avatar and menu (no gap)
-// so moving the mouse down to click "Se déconnecter" never closes it.
 function UserAvatarMenu({ user, profil, onLogout }) {
   const [open, setOpen] = useState(false);
   const roleInfo = profil ? getRoleInfo(profil.role) : null;
@@ -219,8 +224,9 @@ function UserAvatarMenu({ user, profil, onLogout }) {
 }
 
 // ── Main Layout ───────────────────────────────────────────
-export default function Layout({ children, page, setPage, user, profil, onLogout }) {
+export default function Layout({ children, user, profil, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
   const sidebarWidth = collapsed ? 64 : 240;
 
   const visibleMain = mainNavItems.filter(n =>
@@ -229,6 +235,13 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
   const visibleSettings = settingsNavItems.filter(n =>
     peutFaire(profil, n.permission)
   );
+
+  function isActive(item) {
+    if (location.pathname === item.path) return true;
+    // /agents/:id → highlight agents nav item
+    if (item.id === 'agents' && location.pathname.startsWith('/agents/')) return true;
+    return false;
+  }
 
   return (
     <div className="app">
@@ -348,8 +361,7 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
             <NavItem
               key={n.id}
               item={n}
-              isActive={page === n.id || (page === 'fiche' && n.id === 'agents')}
-              onClick={setPage}
+              isActive={isActive(n)}
               collapsed={collapsed}
             />
           ))}
@@ -372,8 +384,7 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
                 <NavItem
                   key={n.id}
                   item={n}
-                  isActive={page === n.id}
-                  onClick={setPage}
+                  isActive={isActive(n)}
                   collapsed={collapsed}
                 />
               ))}
@@ -419,7 +430,7 @@ export default function Layout({ children, page, setPage, user, profil, onLogout
             color: '#0F0F0F', letterSpacing: '-0.2px',
             fontFamily: 'Poppins, sans-serif',
           }}>
-            {pageTitles[page] || 'RH Manager'}
+            {getPageTitle(location.pathname)}
           </h2>
           <UserAvatarMenu user={user} profil={profil} onLogout={onLogout} />
         </div>
