@@ -159,29 +159,30 @@ export default function BulletinPreview({ form, preview, agent, entreprise }) {
             sous le libellé, en gras, dans la même cellule.
           */}
           <tr>
-            {/* Colonne 1 : informations de l'entreprise + date d'embauche en gras */}
+            {/* Colonne 1 : informations de l'entreprise */}
             <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
               <div style={{ fontWeight: 700 }}>{nom}</div>
               {infoLignes.map((l, i) => <div key={i}>{l}</div>)}
-              {dateEmb !== '—' && (
-                <div style={{ fontWeight: 700, marginTop: 4 }}>
-                  Date d'embauche : {dateEmb}
-                </div>
-              )}
             </td>
             {/* Colonne 2 : organisme CNSS employeur */}
             <td style={{ ...CELL, verticalAlign: 'top', lineHeight: 1.6 }}>
               <div>Caisse Nationale de Sécurité Sociale (CNSS)</div>
               {entreprise?.cnss_employeur && <div>N° : {entreprise.cnss_employeur}</div>}
             </td>
-            {/* Colonnes 3-4 : nom de l'agent + numéro CNSS agent */}
+            {/* Colonnes 3-4 : nom de l'agent + numéro CNSS + date d'embauche */}
             <td colSpan={2} style={{ ...CELL, verticalAlign: 'top', fontWeight: 700 }}>
               {/* NOM PRENOM — format NOM en majuscules, prénom en titre */}
               <div>{nomComplet}</div>
-              {/* Numéro CNSS de l'agent — toujours affiché s'il existe */}
+              {/* Numéro CNSS de l'agent */}
               {agent.cnss && (
                 <div style={{ fontWeight: 400, marginTop: 4, fontSize: 10 }}>
                   N° CNSS : {agent.cnss}
+                </div>
+              )}
+              {/* Date d'embauche sous le CNSS, en gras */}
+              {dateEmb !== '—' && (
+                <div style={{ fontWeight: 700, marginTop: 4, fontSize: 10 }}>
+                  Date d'embauche : {dateEmb}
                 </div>
               )}
             </td>
