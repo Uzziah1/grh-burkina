@@ -121,20 +121,46 @@ export default function App() {
   const [entreprise, setEntreprise] = useState(null);
   const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [loading, setLoading] = useState(true);
+  // true = l'utilisateur vient de cliquer sur un lien d'invitation et doit définir son mdp
+  const [needsPassword, setNeedsPassword] = useState(false);
   const { profil, loading: profilLoading } = useProfil(user);
 
   useEffect(() => {
+    // Détecter le flux d'invitation dans le hash AVANT getSession
+    const hash = window.location.hash;
+    if (hash.includes('type=invite')) {
+      setNeedsPassword(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
-      } else {
-        try { localStorage.removeItem('grh_user_cached'); } catch {}
+      // Si c'est une invitation, ne pas connecter directement
+      if (!hash.includes('type=invite')) {
+        setUser(u);
+        if (u) {
+          try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
+        } else {
+          try { localStorage.removeItem('grh_user_cached'); } catch {}
+        }
       }
       setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Si l'utilisateur vient de définir son mot de passe, le connecter
+      if (event === 'USER_UPDATED' && needsPassword) {
+        setNeedsPassword(false);
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) {
+          try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
+        }
+        return;
+      }
+      // Ignorer SIGNED_IN pendant le flux d'invitation
+      if (event === 'SIGNED_IN' && window.location.hash.includes('type=invite')) {
+        return;
+      }
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -169,6 +195,9 @@ export default function App() {
   }
 
   if (loading || profilLoading) return <SkeletonApp />;
+
+  // Flux d'invitation : afficher le formulaire de définition de mot de passe
+  if (needsPassword) return <Login onLogin={setUser} inviteMode />;
 
   if (!user) return <Login onLogin={setUser} />;
 

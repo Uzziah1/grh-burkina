@@ -6,25 +6,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Mail, Lock, LogIn, Eye, EyeOff, KeyRound } from 'lucide-react';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, inviteMode = false }) {
   const [email, setEmail]           = useState('');
   const [password, setPassword]     = useState('');
   const [password2, setPassword2]   = useState('');
   const [error, setError]           = useState('');
   const [loading, setLoading]       = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  // Mode "définir le mot de passe" après invitation
-  const [inviteMode, setInviteMode] = useState(false);
-
-  // Au chargement, détecter le token d'invitation dans l'URL
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('type=invite') || hash.includes('type=recovery')) {
-      // Supabase a déjà échangé le token — la session est active
-      setInviteMode(true);
-    }
-  }, []);
 
   // ── Connexion normale ──────────────────────────────────
   async function handleLogin(e) {
