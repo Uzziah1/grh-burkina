@@ -108,11 +108,33 @@ export default function Archives({ profil }) {
     if (search)              query = query.ilike('titre', `%${search}%`);
 
     const { data, count, error } = await query;
-    if (error) { showToast('Erreur chargement', 'error'); }
-    else {
-      setRows(data || []);
-      setTotal(count || 0);
+    if (error) { showToast('Erreur chargement', 'error'); setLoading(false); return; }
+
+    // Récupérer les emails depuis profils pour les user_id uniques
+    const rows = data || [];
+    const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+    let emailMap = {};
+    if (userIds.length > 0) {
+      const { data: profData } = await supabase
+        .from('profils')
+        .select('id, email, nom, prenom')
+        .in('id', userIds);
+      if (profData) {
+        profData.forEach(p => {
+          emailMap[p.id] = p.nom && p.prenom
+            ? `${p.prenom} ${p.nom}`
+            : p.email || p.id?.slice(0, 8);
+        });
+      }
     }
+    // Attacher l'info utilisateur à chaque ligne
+    const enriched = rows.map(r => ({
+      ...r,
+      _ajoutePar: emailMap[r.user_id] || r.user_id?.slice(0, 8) || '—',
+    }));
+
+    setRows(enriched);
+    setTotal(count || 0);
     setLoading(false);
   }, [page, activeCat, search]);
 
@@ -447,7 +469,7 @@ export default function Archives({ profil }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <User size={12} color="#A3A3A3" />
                         <span style={{ fontSize: 12, color: '#737373' }}>
-                          {doc.user_id?.slice(0, 8) || '—'}
+                          {doc._ajoutePar || '—'}
                         </span>
                       </div>
                     )}
