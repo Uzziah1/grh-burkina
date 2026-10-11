@@ -33,12 +33,10 @@ export default function Login({ onLogin, inviteMode = false }) {
 
   const inputBase = {
     width: '100%', boxSizing: 'border-box',
-    padding: '12px 16px 12px 44px',
-    border: 'none',
-    borderBottom: '1.5px solid #E5E7EB',
-    borderRadius: 0,
-    fontSize: 14,
-    color: '#111827', background: 'transparent',
+    padding: '13px 16px 13px 44px',
+    border: '1.5px solid #E5E7EB',
+    borderRadius: 10, fontSize: 14,
+    color: '#111827', background: '#fff',
     outline: 'none', fontFamily: 'inherit',
     transition: 'border-color 0.2s',
   };
@@ -95,17 +93,27 @@ export default function Login({ onLogin, inviteMode = false }) {
 
       {/* ── DROITE : panneau formulaire blanc ─────────────────── */}
       <div style={{
-        width: 520,
+        width: 560,
         flexShrink: 0,
-        background: '#fff',
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '56px 60px',
         overflowY: 'auto',
-        boxShadow: '-4px 0 40px rgba(0,0,0,0.10)',
       }}>
+        {/* Fond blanc avec découpe oblique à gauche */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#fff',
+          clipPath: 'polygon(80px 0%, 100% 0%, 100% 100%, 0% 100%)',
+          boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
+        }} />
+        <div style={{
+          position: 'relative', zIndex: 1,
+          width: '100%',
+          padding: '56px 60px 56px 80px',
+        }}>
         <div style={{ width: '100%', maxWidth: 400 }}>
 
           {/* Logo */}
@@ -170,8 +178,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword(e.target.value)}
                     required autoFocus
                     style={{ ...inputBase, paddingRight: 44 }}
-                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
                   />
                   <ToggleEye show={showPassword} onToggle={() => setShowPassword(v => !v)} />
                 </InputIcon>
@@ -186,8 +194,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword2(e.target.value)}
                     required
                     style={inputBase}
-                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
                   />
                 </InputIcon>
               </Field>
@@ -209,8 +217,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setEmail(e.target.value)}
                     required autoFocus
                     style={inputBase}
-                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
                   />
                 </InputIcon>
               </Field>
@@ -224,8 +232,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword(e.target.value)}
                     required
                     style={{ ...inputBase, paddingRight: 44 }}
-                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
                   />
                   <ToggleEye show={showPassword} onToggle={() => setShowPassword(v => !v)} />
                 </InputIcon>
@@ -239,17 +247,17 @@ export default function Login({ onLogin, inviteMode = false }) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', marginTop: 40, fontSize: 12, color: '#D1D5DB' }}>
-            © {new Date().getFullYear()} RH Manager · Burkina Faso
+            © {new Date().getFullYear()} RH MANAGER · Burkina Faso
           </div>
+        </div>
         </div>
       </div>
 
       {/* ── Responsive mobile ── */}
       <style>{`
         @media (max-width: 700px) {
-          div[style*="width: 460px"] {
+          div[style*="width: 560px"] {
             width: 100% !important;
-            padding: 32px 24px !important;
           }
           div[style*="flex: 1"] { display: none !important; }
         }
@@ -262,11 +270,10 @@ export default function Login({ onLogin, inviteMode = false }) {
 
 function Field({ label, children, style }) {
   return (
-    <div style={{ marginBottom: 20, ...style }}>
+    <div style={{ marginBottom: 18, ...style }}>
       <label style={{
-        display: 'block', fontSize: 11, fontWeight: 600,
-        color: '#9CA3AF', marginBottom: 4, letterSpacing: 0.8,
-        textTransform: 'uppercase',
+        display: 'block', fontSize: 12, fontWeight: 600,
+        color: '#374151', marginBottom: 6,
       }}>
         {label}
       </label>
