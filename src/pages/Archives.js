@@ -446,7 +446,7 @@ export default function Archives({ profil }) {
                     {isAdmin && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <User size={12} color="#A3A3A3" />
-                        <span style={{ fontSize: 12, color: '#737373', fontFamily: 'monospace', fontSize: 10 }}>
+                        <span style={{ fontSize: 10, color: '#737373', fontFamily: 'monospace' }}>
                           {doc.user_id?.slice(0, 8) || '—'}
                         </span>
                       </div>
