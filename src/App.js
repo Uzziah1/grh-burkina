@@ -213,12 +213,81 @@ function AppRoutes({ user, profil, agents, entreprise, loadData }) {
   );
 }
 
+// ── Écran d'erreur réseau / Supabase indisponible ────────────
+function ErrorScreen({ onRetry }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      height: '100vh', background: '#F5F5F5',
+      fontFamily: 'Poppins, sans-serif', gap: 16,
+      padding: 24, textAlign: 'center',
+    }}>
+      {/* Icône */}
+      <div style={{
+        width: 72, height: 72, borderRadius: '50%',
+        background: '#FEF2F2', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        marginBottom: 8,
+      }}>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+          stroke="#DC2626" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 6s4-4 11-4 11 4 11 4" />
+          <path d="M1 10s4-4 11-4 11 4 11 4" />
+          <line x1="2" y1="20" x2="22" y2="4" />
+        </svg>
+      </div>
+
+      <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>
+        Service temporairement indisponible
+      </div>
+      <div style={{ fontSize: 13, color: '#6B7280', maxWidth: 340, lineHeight: 1.6 }}>
+        Impossible de se connecter au serveur.<br />
+        Vérifiez votre connexion internet et réessayez.
+      </div>
+
+      <button
+        onClick={onRetry}
+        style={{
+          marginTop: 8,
+          padding: '12px 28px',
+          background: '#E8920A', color: '#fff',
+          border: 'none', borderRadius: 8,
+          fontSize: 14, fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
+          boxShadow: '0 4px 14px rgba(232,146,10,0.30)',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = '#d4820a'}
+        onMouseLeave={e => e.currentTarget.style.background = '#E8920A'}
+      >
+        Réessayer
+      </button>
+
+      <div style={{ fontSize: 11, color: '#D1D5DB', marginTop: 4 }}>
+        Si le problème persiste, contactez votre administrateur.
+      </div>
+    </div>
+  );
+}
+
+// Timeout helper : rejette si la promesse dépasse `ms` millisecondes
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), ms)
+    ),
+  ]);
+}
+
 export default function App() {
   // On initialise user à null — Supabase va restaurer la session tout seul
   const [user, setUser] = useState(null);
   const [agents, setAgents] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
   // true = l'utilisateur vient de cliquer sur un lien d'invitation et doit définir son mdp
   const [needsPassword, setNeedsPassword] = useState(false);
   const { profil, loading: profilLoading } = useProfil(user);
@@ -231,7 +300,10 @@ export default function App() {
     }
   }, [profil]);
 
-  useEffect(() => {
+  const initAuth = () => {
+    setNetworkError(false);
+    setLoading(true);
+
     // Nettoyer l'ancienne clé de cache (migration sécurité)
     try { localStorage.removeItem('grh_user_cached'); } catch {}
 
@@ -241,14 +313,21 @@ export default function App() {
       setNeedsPassword(true);
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      // Si c'est une invitation, ne pas connecter directement
-      if (!hash.includes('type=invite')) {
-        setUser(u);
-      }
-      setLoading(false);
-    });
+    // Timeout de 8 secondes sur la récupération de session
+    withTimeout(supabase.auth.getSession(), 8000)
+      .then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        if (!hash.includes('type=invite')) setUser(u);
+        setLoading(false);
+      })
+      .catch(() => {
+        setNetworkError(true);
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // Si l'utilisateur vient de définir son mot de passe, le connecter
@@ -273,17 +352,22 @@ export default function App() {
   async function loadData() {
     try {
       const [a, ent] = await Promise.all([
-        supabase.from('agents').select('*').order('nom'),
-        supabase.from('entreprise').select('*').limit(1).single(),
+        withTimeout(supabase.from('agents').select('*').order('nom'), 10000),
+        withTimeout(supabase.from('entreprise').select('*').limit(1).single(), 10000),
       ]);
       setAgents(a.data || []);
       setEntreprise(ent.data || {});
+      setNetworkError(false);
     } catch (err) {
       console.error('Erreur chargement données:', err);
+      setNetworkError(true);
     }
   }
 
   if (loading || profilLoading) return <SkeletonApp />;
+
+  // Erreur réseau : Supabase injoignable
+  if (networkError) return <ErrorScreen onRetry={() => { initAuth(); if (user) loadData(); }} />;
 
   // Flux d'invitation : afficher le formulaire de définition de mot de passe
   if (needsPassword) return <BrowserRouter><Login onLogin={setUser} inviteMode /></BrowserRouter>;
