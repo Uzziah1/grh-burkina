@@ -86,6 +86,7 @@ export default function Archives({ profil }) {
   const [searchInput, setSearchInput] = useState('');
   const [modal, setModal]           = useState(false); // 'add' | false
   const [viewDoc, setViewDoc]       = useState(null);
+  const [viewUrl, setViewUrl]       = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [form, setForm]             = useState(EMPTY_FORM);
   const [saving, setSaving]         = useState(false);
@@ -166,8 +167,7 @@ export default function Archives({ profil }) {
       }
 
       setUploadProgress(70);
-      const { data: urlData } = supabase.storage.from('archives').getPublicUrl(path);
-      fichier_url    = urlData?.publicUrl || path;
+      fichier_url    = path;   // stocke le path relatif, pas une URL publique
       fichier_nom    = file.name;
       fichier_taille = file.size;
       fichier_type   = file.type;
@@ -198,14 +198,9 @@ export default function Archives({ profil }) {
 
   // ── Suppression ────────────────────────────────────────
   async function handleDelete(doc) {
-    // Supprimer le fichier storage si existant
+    // Supprimer le fichier storage si existant (fichier_url contient le path relatif)
     if (doc.fichier_url) {
-      const { data: { user } } = await supabase.auth.getUser();
-      // Extraire le path relatif depuis l'URL publique
-      const pathMatch = doc.fichier_url.match(new RegExp(`archives/${user.id}/(.+)`));
-      if (pathMatch) {
-        await supabase.storage.from('archives').remove([`${user.id}/${pathMatch[1]}`]);
-      }
+      await supabase.storage.from('archives').remove([doc.fichier_url]);
     }
     const { error } = await supabase.from('archives').delete().eq('id', doc.id);
     if (error) return showToast('Erreur suppression', 'error');
@@ -215,18 +210,23 @@ export default function Archives({ profil }) {
     fetchCounts();
   }
 
+  // ── Signed URL (bucket privé) ──────────────────────────
+  async function getSignedUrl(path, expiresIn = 60) {
+    const { data, error } = await supabase.storage
+      .from('archives')
+      .createSignedUrl(path, expiresIn);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  }
+
   // ── Téléchargement ─────────────────────────────────────
   async function handleDownload(doc) {
     if (!doc.fichier_url) return;
-    // Extraire le path storage
-    const match = doc.fichier_url.match(/\/archives\/(.+)$/);
-    if (!match) { window.open(doc.fichier_url, '_blank'); return; }
-    const { data, error } = await supabase.storage.from('archives').download(match[1]);
-    if (error || !data) return showToast('Erreur téléchargement', 'error');
-    const url = URL.createObjectURL(data);
+    const url = await getSignedUrl(doc.fichier_url, 300);
+    if (!url) return showToast('Erreur téléchargement', 'error');
     const a = document.createElement('a');
     a.href = url; a.download = doc.fichier_nom || 'archive';
-    a.click(); URL.revokeObjectURL(url);
+    a.click();
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -458,7 +458,11 @@ export default function Archives({ profil }) {
                         <>
                           <button
                             title="Aperçu"
-                            onClick={() => setViewDoc(doc)}
+                            onClick={async () => {
+                              setViewDoc(doc);
+                              const url = await getSignedUrl(doc.fichier_url, 600);
+                              setViewUrl(url);
+                            }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, color: '#737373', display: 'flex' }}
                             onMouseEnter={e => { e.currentTarget.style.background = '#F5F5F5'; e.currentTarget.style.color = '#2563EB'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#737373'; }}
@@ -655,7 +659,7 @@ export default function Archives({ profil }) {
           MODAL APERÇU
       ══════════════════════════════ */}
       {viewDoc && (
-        <div className="modal-overlay" onClick={() => setViewDoc(null)}>
+        <div className="modal-overlay" onClick={() => { setViewDoc(null); setViewUrl(null); }}>
           <div
             className="modal"
             style={{ width: '90vw', maxWidth: 860, height: '90vh' }}
@@ -670,22 +674,24 @@ export default function Archives({ profil }) {
                 >
                   <Download size={13} strokeWidth={2} /> Télécharger
                 </button>
-                <button onClick={() => setViewDoc(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#737373', display: 'flex' }}>
+                <button onClick={() => { setViewDoc(null); setViewUrl(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#737373', display: 'flex' }}>
                   <X size={20} strokeWidth={2} />
                 </button>
               </div>
             </div>
 
             <div style={{ flex: 1, overflow: 'hidden', background: '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {viewDoc.fichier_type?.includes('image') ? (
+              {!viewUrl ? (
+                <div style={{ color: '#A3A3A3', fontSize: 13 }}>Chargement…</div>
+              ) : viewDoc.fichier_type?.includes('image') ? (
                 <img
-                  src={viewDoc.fichier_url}
+                  src={viewUrl}
                   alt={viewDoc.titre}
                   style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                 />
               ) : viewDoc.fichier_type?.includes('pdf') ? (
                 <iframe
-                  src={viewDoc.fichier_url}
+                  src={viewUrl}
                   title={viewDoc.titre}
                   style={{ width: '100%', height: '100%', border: 'none' }}
                 />
