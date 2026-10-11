@@ -106,7 +106,7 @@ export default function Login({ onLogin, inviteMode = false }) {
         <div style={{
           position: 'absolute', inset: 0,
           background: '#fff',
-          clipPath: 'polygon(80px 0%, 100% 0%, 100% 100%, 0% 100%)',
+          clipPath: 'polygon(160px 0%, 100% 0%, 100% 100%, 0% 100%)',
           boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
         }} />
         <div style={{
