@@ -257,7 +257,8 @@ export default function Utilisateurs({ profil }) {
           )}
         </div>
 
-        <table>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ minWidth: 540 }}>
           <thead>
             <tr>
               <th>Utilisateur</th>
@@ -356,6 +357,7 @@ export default function Utilisateurs({ profil }) {
             })}
           </tbody>
         </table>
+        </div>{/* /overflowX wrapper */}
       </div>
 
       {/* ════════════════════════════════

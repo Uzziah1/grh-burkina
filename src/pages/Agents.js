@@ -10,7 +10,7 @@ import {
   Search, SlidersHorizontal, Download, Upload,
   Plus, Eye, Pencil, Trash2, FileText,
   X, Save, AlertTriangle, Award,
-  CalendarCheck, CalendarOff, Wallet,
+  CalendarCheck, CalendarOff, Wallet, UserCircle, Camera,
 } from 'lucide-react';
 import {
   generateAttestation, generateConge,
@@ -825,32 +825,48 @@ function importExcel(file) {
           <div>
             <FormSection title="Informations personnelles" />
             {/* ── Photo de profil ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-              <div style={{
-                width: 80, height: 80, borderRadius: '50%', overflow: 'hidden',
-                border: '2px solid #E5E5E5', background: '#F5F5F5',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                {form.photo_url
-                  ? <img src={form.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontSize: 28, color: '#A3A3A3' }}>👤</span>
-                }
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+              {/* Avatar cliquable */}
+              <label htmlFor="photo-upload" style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                <div style={{
+                  width: 88, height: 88, borderRadius: '50%', overflow: 'hidden',
+                  border: '2.5px solid #E5E5E5', background: '#F5F5F5',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {form.photo_url
+                    ? <img src={form.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <UserCircle size={44} color="#D4D4D4" strokeWidth={1.5} />
+                  }
+                </div>
+                {/* Badge caméra */}
+                <div style={{
+                  position: 'absolute', bottom: 2, right: 2,
+                  width: 26, height: 26, borderRadius: '50%',
+                  background: '#E8920A', border: '2px solid #fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(232,146,10,0.4)',
+                }}>
+                  <Camera size={13} color="#fff" strokeWidth={2.5} />
+                </div>
+              </label>
+
+              {/* Texte + input caché */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#404040', display: 'block', marginBottom: 6 }}>Photo de profil</label>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0F0F0F', marginBottom: 4 }}>Photo de profil</div>
+                <div style={{ fontSize: 12, color: '#A3A3A3', marginBottom: 8 }}>JPG, PNG — max 5 Mo</div>
                 <input
+                  id="photo-upload"
                   type="file"
                   accept="image/*"
-                  style={{ fontSize: 12 }}
+                  style={{ display: 'none' }}
                   onChange={async e => {
                     const file = e.target.files[0];
                     if (!file) return;
                     const { supabase: sb } = await import('../lib/supabase');
                     const safeName = file.name
-                      .normalize('NFD').replace(/[̀-ͯ]/g, '') // enlève accents
-                      .replace(/[^a-zA-Z0-9._-]/g, '_')                 // remplace tout caractère spécial
-                      .replace(/_+/g, '_');                              // dédouble les underscores
+                      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                      .replace(/[^a-zA-Z0-9._-]/g, '_')
+                      .replace(/_+/g, '_');
                     const path = `agents/${Date.now()}_${safeName}`;
                     const { error } = await sb.storage.from('photos').upload(path, file, { upsert: true });
                     if (error) { alert('Impossible d\'envoyer la photo. Vérifiez votre connexion.'); return; }
@@ -859,8 +875,11 @@ function importExcel(file) {
                   }}
                 />
                 {form.photo_url && (
-                  <button type="button" style={{ fontSize: 11, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}
-                    onClick={() => setF('photo_url', '')}>Supprimer la photo</button>
+                  <button type="button"
+                    style={{ fontSize: 11, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setF('photo_url', '')}>
+                    <X size={12} /> Supprimer la photo
+                  </button>
                 )}
               </div>
             </div>

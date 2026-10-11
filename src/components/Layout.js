@@ -2,13 +2,13 @@
 // White sidebar | Orange accent | Poppins font | Lucide icons
 // Features: collapsible sidebar with tooltips, user avatar dropdown in topbar
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
   DollarSign, FolderOpen, Building2, UserCog,
-  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList, CreditCard,
+  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList, CreditCard, Menu, X,
 } from 'lucide-react';
 
 // ── App version ────────────────────────────────────────────
@@ -226,8 +226,12 @@ function UserAvatarMenu({ user, profil, onLogout }) {
 // ── Main Layout ───────────────────────────────────────────
 export default function Layout({ children, user, profil, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const sidebarWidth = collapsed ? 64 : 240;
+
+  // Close mobile drawer on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const visibleMain = mainNavItems.filter(n =>
     n.permission === null || peutFaire(profil, n.permission)
@@ -247,21 +251,40 @@ export default function Layout({ children, user, profil, onLogout }) {
     <div className="app">
 
       {/* ════════════════════════════════
+          MOBILE OVERLAY
+      ════════════════════════════════ */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 199,
+            display: 'none',
+          }}
+          className="mobile-overlay"
+        />
+      )}
+
+      {/* ════════════════════════════════
           SIDEBAR
       ════════════════════════════════ */}
-      <div style={{
-        width: sidebarWidth,
-        background: '#FFFFFF',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        flexShrink: 0,
-        borderRight: '1px solid #E5E5E5',
-        boxShadow: '1px 0 8px rgba(0,0,0,0.04)',
-        transition: 'width 0.25s ease',
-        overflow: 'hidden',
-        position: 'relative',
-      }}>
+      <div
+        className={`sidebar-wrapper${mobileOpen ? ' mobile-open' : ''}`}
+        style={{
+          width: sidebarWidth,
+          background: '#FFFFFF',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          flexShrink: 0,
+          borderRight: '1px solid #E5E5E5',
+          boxShadow: '1px 0 8px rgba(0,0,0,0.04)',
+          transition: 'width 0.25s ease, transform 0.28s ease',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
 
         {/* Logo */}
         <div style={{
@@ -417,18 +440,35 @@ export default function Layout({ children, user, profil, onLogout }) {
         <div style={{
           background: '#FFFFFF',
           borderBottom: '1px solid #E5E5E5',
-          padding: '0 28px',
+          padding: '0 20px 0 16px',
           height: 60,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexShrink: 0,
           boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          gap: 12,
         }}>
+          {/* Hamburger — mobile only */}
+          <button
+            className="hamburger-btn"
+            onClick={() => setMobileOpen(o => !o)}
+            aria-label="Menu"
+            style={{
+              display: 'none', /* shown via CSS media query */
+              background: 'none', border: 'none',
+              cursor: 'pointer', padding: 6, borderRadius: 8,
+              color: '#0F0F0F', flexShrink: 0,
+            }}
+          >
+            {mobileOpen ? <X size={22} strokeWidth={2} /> : <Menu size={22} strokeWidth={2} />}
+          </button>
+
           <h2 style={{
             fontSize: 16, fontWeight: 700,
             color: '#0F0F0F', letterSpacing: '-0.2px',
             fontFamily: 'Poppins, sans-serif',
+            flex: 1,
           }}>
             {getPageTitle(location.pathname)}
           </h2>

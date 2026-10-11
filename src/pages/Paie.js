@@ -11,7 +11,7 @@ import { calculerBulletin } from '../lib/calcPaie';
 import { formatMontant } from '../lib/helpers';
 import {
   DollarSign, Plus, FileText, Search,
-  X, Save, Printer, Eye, Trash2, CheckCircle, FileSpreadsheet,
+  X, Save, Printer, Eye, Trash2, CheckCircle, FileSpreadsheet, Wallet,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -1347,7 +1347,7 @@ export default function Paie({ agents, entreprise, profil }) {
                   background: '#FEF3E2', border: '1px solid #FDDBA0',
                   borderRadius: 8, fontSize: 11, color: '#92400E',
                 }}>
-                  💰 <strong>{avancesAgent.length} avance(s) approuvée(s)</strong> détectée(s) et appliquée(s) automatiquement
+                  <Wallet size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} /><strong>{avancesAgent.length} avance(s) approuvée(s)</strong> détectée(s) et appliquée(s) automatiquement
                   ({formatMontant(avancesAgent.reduce((s, a) => s + (parseFloat(a.montant) || 0), 0))})
                 </div>
               )}

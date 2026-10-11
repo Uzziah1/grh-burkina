@@ -128,14 +128,21 @@ async function drawBadge(canvas, agent, entreprise) {
       }
       ctx.drawImage(photoImg, offsetX, offsetY, drawW, drawH);
     } catch (_) {
-      // Silhouette fallback
-      ctx.fillStyle = '#cccccc';
-      ctx.fillRect(photoCX - photoR, photoCY - photoR, photoR * 2, photoR * 2);
-      ctx.font = `${photoR}px Arial`;
-      ctx.fillStyle = '#888888';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('👤', photoCX, photoCY);
+      // Silhouette fallback — draw head + shoulders with canvas paths
+      ctx.fillStyle = '#d1d5db';
+      ctx.beginPath();
+      ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
+      ctx.fill();
+      // Head circle
+      const headR = photoR * 0.38;
+      ctx.fillStyle = '#9ca3af';
+      ctx.beginPath();
+      ctx.arc(photoCX, photoCY - photoR * 0.18, headR, 0, Math.PI * 2);
+      ctx.fill();
+      // Shoulders arc
+      ctx.beginPath();
+      ctx.arc(photoCX, photoCY + photoR * 0.9, photoR * 0.72, Math.PI, 0);
+      ctx.fill();
     }
   } else {
     ctx.fillStyle = '#e0e0e0';
@@ -410,11 +417,14 @@ export default function Badge({ agents, entreprise }) {
                 { label: 'Nom',       value: `${agent.prenom} ${agent.nom}` },
                 { label: 'Poste',     value: agent.poste || '—' },
                 { label: 'Téléphone', value: agent.telephone || '—' },
-                { label: 'Photo',     value: agent.photo_url ? '✅ Disponible' : '⚠️ Aucune photo' },
+                { label: 'Photo',     value: agent.photo_url ? '● Disponible' : '○ Aucune photo', photoStatus: agent.photo_url ? 'ok' : 'warn' },
               ].map(row => (
                 <div key={row.label}>
                   <span style={{ color: '#A3A3A3' }}>{row.label} : </span>
-                  <span style={{ fontWeight: 600, color: '#0F0F0F' }}>{row.value}</span>
+                  <span style={{
+                    fontWeight: 600,
+                    color: row.photoStatus === 'ok' ? '#16a34a' : row.photoStatus === 'warn' ? '#d97706' : '#0F0F0F'
+                  }}>{row.value}</span>
                 </div>
               ))}
               {!agent.photo_url && (

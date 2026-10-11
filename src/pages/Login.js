@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Mail, Lock, LogIn, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Mail, Lock, LogIn, Eye, EyeOff, KeyRound, AlertTriangle } from 'lucide-react';
 
 export default function Login({ onLogin, inviteMode = false }) {
   const [email, setEmail]           = useState('');
@@ -144,7 +144,7 @@ export default function Login({ onLogin, inviteMode = false }) {
               marginBottom: 20,
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              ⚠️ {error}
+              <AlertTriangle size={15} style={{ flexShrink: 0 }} /> {error}
             </div>
           )}
 
