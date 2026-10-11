@@ -6,8 +6,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Pagination from '../components/Pagination';
-
-const PAGE_SIZE = 20;
 import { supabase } from '../lib/supabase';
 import { peutFaire } from '../lib/useProfil';
 import { calculerBulletin } from '../lib/calcPaie';
@@ -19,6 +17,8 @@ import {
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import BulletinPreview from '../components/BulletinPreview';
+
+const PAGE_SIZE = 20;
 
 // ── Toast notification ────────────────────────────────────
 function showToast(msg, type = 'success') {

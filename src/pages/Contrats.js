@@ -3,13 +3,13 @@
 
 import React, { useState, useMemo } from 'react';
 import Pagination from '../components/Pagination';
-
-const PAGE_SIZE = 20;
 import { formatDate, joursRestants, getInitials, avatarColor } from '../lib/helpers';
 import {
   FileText, AlertTriangle, CheckCircle,
   Clock, XCircle, Search, Eye,
 } from 'lucide-react';
+
+const PAGE_SIZE = 20;
 
 // ── Status badge for contract days remaining ──────────────
 function JoursBadge({ dateFin }) {
