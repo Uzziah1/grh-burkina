@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/helpers';
-import { peutFaire } from '../lib/useProfil';
 import Pagination from '../components/Pagination';
 import {
   Archive, Receipt, FileText, ClipboardCheck, FolderOpen,

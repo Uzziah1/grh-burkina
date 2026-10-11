@@ -137,14 +137,6 @@ export default function Conges({ agents, profil, entreprise }) {
     }
   }
 
-  // ── Filtrage de la liste ──────────────────────────────
-  const filtered = conges.filter(c => {
-    const name = `${c.agents?.prenom || ''} ${c.agents?.nom || ''}`.toLowerCase();
-    if (search && !name.includes(search.toLowerCase())) return false;
-    if (filterStatut && c.statut !== filterStatut) return false;
-    return true;
-  });
-
   // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
     if (!form.agent_id || !form.date_debut || !form.date_fin) {
