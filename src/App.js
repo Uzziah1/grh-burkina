@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { useProfil } from './lib/useProfil';
+import { useProfil, peutFaire } from './lib/useProfil';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -109,6 +109,15 @@ function SkeletonApp() {
   );
 }
 
+// ── ProtectedRoute : vérifie la permission avant d'afficher ─
+function ProtectedRoute({ permission, profil, children }) {
+  if (!profil) return null; // profil pas encore chargé
+  if (permission && !peutFaire(profil, permission)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
+
 // ── FicheWrapper : reads :agentId from URL ───────────────────
 function FicheWrapper({ agents, entreprise, profil }) {
   const { agentId } = useParams();
@@ -133,19 +142,71 @@ function AppRoutes({ user, profil, agents, entreprise, loadData }) {
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard agents={agents} onOpenFiche={openFiche} />} />
-        <Route path="/agents" element={<Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} />} />
-        <Route path="/agents/:agentId" element={<FicheWrapper agents={agents} entreprise={entreprise} profil={profil} />} />
-        <Route path="/contrats" element={<Contrats agents={agents} onOpenFiche={openFiche} />} />
-        <Route path="/conges" element={<Conges agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
-        <Route path="/avances" element={<Avances agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
-        <Route path="/paie" element={<Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
-        <Route path="/etat-salaires" element={<EtatSalaires entreprise={entreprise} profil={profil} />} />
-        <Route path="/documents" element={<Documents agents={agents} entreprise={entreprise} profil={profil} />} />
-        <Route path="/badges" element={<Badge agents={agents} entreprise={entreprise} />} />
-        <Route path="/historique" element={<Historique />} />
-        <Route path="/entreprise" element={<Entreprise onRefresh={loadData} />} />
-        <Route path="/utilisateurs" element={<Utilisateurs profil={profil} />} />
-        <Route path="/archives" element={<Archives profil={profil} />} />
+        <Route path="/agents" element={
+          <ProtectedRoute permission="voirAgents" profil={profil}>
+            <Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} />
+          </ProtectedRoute>
+        } />
+        <Route path="/agents/:agentId" element={
+          <ProtectedRoute permission="voirAgents" profil={profil}>
+            <FicheWrapper agents={agents} entreprise={entreprise} profil={profil} />
+          </ProtectedRoute>
+        } />
+        <Route path="/contrats" element={
+          <ProtectedRoute permission="voirContrats" profil={profil}>
+            <Contrats agents={agents} onOpenFiche={openFiche} />
+          </ProtectedRoute>
+        } />
+        <Route path="/conges" element={
+          <ProtectedRoute permission="voirConges" profil={profil}>
+            <Conges agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />
+          </ProtectedRoute>
+        } />
+        <Route path="/avances" element={
+          <ProtectedRoute permission="voirAvances" profil={profil}>
+            <Avances agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />
+          </ProtectedRoute>
+        } />
+        <Route path="/paie" element={
+          <ProtectedRoute permission="voirPaie" profil={profil}>
+            <Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />
+          </ProtectedRoute>
+        } />
+        <Route path="/etat-salaires" element={
+          <ProtectedRoute permission="voirEtatSalaires" profil={profil}>
+            <EtatSalaires entreprise={entreprise} profil={profil} />
+          </ProtectedRoute>
+        } />
+        <Route path="/documents" element={
+          <ProtectedRoute permission="voirDocuments" profil={profil}>
+            <Documents agents={agents} entreprise={entreprise} profil={profil} />
+          </ProtectedRoute>
+        } />
+        <Route path="/badges" element={
+          <ProtectedRoute permission="voirDocuments" profil={profil}>
+            <Badge agents={agents} entreprise={entreprise} />
+          </ProtectedRoute>
+        } />
+        <Route path="/historique" element={
+          <ProtectedRoute permission="voirAgents" profil={profil}>
+            <Historique />
+          </ProtectedRoute>
+        } />
+        <Route path="/entreprise" element={
+          <ProtectedRoute permission="voirEntreprise" profil={profil}>
+            <Entreprise onRefresh={loadData} />
+          </ProtectedRoute>
+        } />
+        <Route path="/utilisateurs" element={
+          <ProtectedRoute permission="voirUtilisateurs" profil={profil}>
+            <Utilisateurs profil={profil} />
+          </ProtectedRoute>
+        } />
+        <Route path="/archives" element={
+          <ProtectedRoute permission="voirAgents" profil={profil}>
+            <Archives profil={profil} />
+          </ProtectedRoute>
+        } />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Layout>
@@ -153,13 +214,8 @@ function AppRoutes({ user, profil, agents, entreprise, loadData }) {
 }
 
 export default function App() {
-  // Pré-charger depuis le cache local pour éviter l'écran blanc au retour
-  const [user, setUser] = useState(() => {
-    try {
-      const cached = localStorage.getItem('grh_user_cached');
-      return cached ? JSON.parse(cached) : null;
-    } catch { return null; }
-  });
+  // On initialise user à null — Supabase va restaurer la session tout seul
+  const [user, setUser] = useState(null);
   const [agents, setAgents] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -167,7 +223,18 @@ export default function App() {
   const [needsPassword, setNeedsPassword] = useState(false);
   const { profil, loading: profilLoading } = useProfil(user);
 
+  // Déconnexion automatique si le compte est désactivé
   useEffect(() => {
+    if (profil && profil.actif === false) {
+      supabase.auth.signOut();
+      try { localStorage.removeItem('grh_user_cached'); } catch {}
+    }
+  }, [profil]);
+
+  useEffect(() => {
+    // Nettoyer l'ancienne clé de cache (migration sécurité)
+    try { localStorage.removeItem('grh_user_cached'); } catch {}
+
     // Détecter le flux d'invitation dans le hash AVANT getSession
     const hash = window.location.hash;
     if (hash.includes('type=invite')) {
@@ -179,11 +246,6 @@ export default function App() {
       // Si c'est une invitation, ne pas connecter directement
       if (!hash.includes('type=invite')) {
         setUser(u);
-        if (u) {
-          try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
-        } else {
-          try { localStorage.removeItem('grh_user_cached'); } catch {}
-        }
       }
       setLoading(false);
     });
@@ -192,24 +254,14 @@ export default function App() {
       // Si l'utilisateur vient de définir son mot de passe, le connecter
       if (event === 'USER_UPDATED') {
         setNeedsPassword(false);
-        const u = session?.user ?? null;
-        setUser(u);
-        if (u) {
-          try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
-        }
+        setUser(session?.user ?? null);
         return;
       }
       // Ignorer SIGNED_IN pendant le flux d'invitation
       if (event === 'SIGNED_IN' && window.location.hash.includes('type=invite')) {
         return;
       }
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        try { localStorage.setItem('grh_user_cached', JSON.stringify(u)); } catch {}
-      } else {
-        try { localStorage.removeItem('grh_user_cached'); } catch {}
-      }
+      setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -219,12 +271,16 @@ export default function App() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
-    const [a, ent] = await Promise.all([
-      supabase.from('agents').select('*').order('nom'),
-      supabase.from('entreprise').select('*').limit(1).single(),
-    ]);
-    setAgents(a.data || []);
-    setEntreprise(ent.data || {});
+    try {
+      const [a, ent] = await Promise.all([
+        supabase.from('agents').select('*').order('nom'),
+        supabase.from('entreprise').select('*').limit(1).single(),
+      ]);
+      setAgents(a.data || []);
+      setEntreprise(ent.data || {});
+    } catch (err) {
+      console.error('Erreur chargement données:', err);
+    }
   }
 
   if (loading || profilLoading) return <SkeletonApp />;

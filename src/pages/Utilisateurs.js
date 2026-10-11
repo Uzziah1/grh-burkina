@@ -172,14 +172,18 @@ export default function Utilisateurs({ profil }) {
 
   // ── Mise à jour du rôle ───────────────────────────────
   async function handleUpdateRole(id, role) {
-    await supabase.from('profils').update({ role }).eq('id', id);
+    if (profil?.role !== 'admin') { showToast('Accès refusé', 'error'); return; }
+    const { error } = await supabase.from('profils').update({ role }).eq('id', id);
+    if (error) { showToast('Erreur lors de la mise à jour', 'error'); return; }
     showToast('Rôle mis à jour avec succès');
     loadUtilisateurs();
   }
 
   // ── Activation / désactivation ────────────────────────
   async function handleToggleActif(id, actif) {
-    await supabase.from('profils').update({ actif: !actif }).eq('id', id);
+    if (profil?.role !== 'admin') { showToast('Accès refusé', 'error'); return; }
+    const { error } = await supabase.from('profils').update({ actif: !actif }).eq('id', id);
+    if (error) { showToast('Erreur lors de la mise à jour', 'error'); return; }
     showToast(!actif ? 'Compte activé avec succès' : 'Compte désactivé avec succès');
     loadUtilisateurs();
   }

@@ -81,5 +81,6 @@ export const permissions = {
 
 export function peutFaire(profil, action) {
   if (!profil) return false;
+  if (profil.actif === false) return false; // compte désactivé
   return permissions[profil.role]?.[action] || false;
 }
