@@ -100,7 +100,7 @@ export default function Archives({ profil }) {
 
     let query = supabase
       .from('archives')
-      .select('*, profils(nom, prenom)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -446,8 +446,8 @@ export default function Archives({ profil }) {
                     {isAdmin && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <User size={12} color="#A3A3A3" />
-                        <span style={{ fontSize: 12, color: '#737373' }}>
-                          {doc.profils ? `${doc.profils.prenom} ${doc.profils.nom}` : '—'}
+                        <span style={{ fontSize: 12, color: '#737373', fontFamily: 'monospace', fontSize: 10 }}>
+                          {doc.user_id?.slice(0, 8) || '—'}
                         </span>
                       </div>
                     )}
