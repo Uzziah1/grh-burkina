@@ -57,38 +57,38 @@ function generateBulletinPDF(bulletin, agent, entreprise) {
 
 // ── Generate all bulletins in one multi-page PDF ──────────
 // One A4 page per agent; each page is a complete bulletin.
-// The function draws each bulletin onto the doc then adds a page break.
+// Reproduit fidèlement BulletinPreview : 4 colonnes (28%/30%/22%/20%)
 function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   const NOIR        = [26, 26, 26];
   const GRIS        = [115, 115, 115];
   const ROUGE_CLAIR = [245, 198, 198];
+  const VERT_CLAIR  = [240, 244, 236];
   const BORDER      = [153, 153, 153];
 
-  // ── Colonnes (en mm sur A4 = 210mm, marges 14mm) ──────
-  // L..C1 : libellés (76mm)   C1..C2 : colonne milieu (40mm)   C2..R : valeurs (46mm)
-  const L = 14, R = 196;
-  const C1 = 120, C2 = 157;   // ajustement : libellés plus larges, valeurs 39mm
+  // 4 colonnes : 28% / 30% / 22% / 20% (miroir exact BulletinPreview)
+  // A4 = 210mm, marges L=14 R=196, zone = 182mm
+  const L  = 14;
+  const C1 = 14  + 182 * 0.28;   // ~64.96
+  const C2 = C1  + 182 * 0.30;   // ~119.56
+  const C3 = C2  + 182 * 0.22;   // ~159.60
+  const R  = 196;
   let y = 12;
 
-  // ── Formatage montant : espace insécable → espace normal ─
-  // jsPDF peut mal rendre   (espace fine insécable de fr-FR).
-  // On formate manuellement avec des espaces standards.
+  // Formatage montant sans toLocaleString (evite slash jsPDF)
   const fmtN = (v) => {
     const n = Math.round(parseFloat(v));
     if (!n || isNaN(n)) return '';
-    // Groupes de 3 séparés par espace (pas de virgule, pas de slash)
-    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
   };
 
-  // ── Helper : dessine une cellule (fond + bordure + texte) ─
-  // On dessine fond puis lignes séparément pour éviter l'overlap double-bordure
+  function titleCase(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
+
+  // Helper cellule : fond + texte (pas de bordure — dessin bordures separe)
   const cell = (x1, x2, h, text, opts = {}) => {
-    // fond
     if (opts.bg) {
       doc.setFillColor(...opts.bg);
       doc.rect(x1, y, x2 - x1, h, 'F');
     }
-    // texte
     if (text !== null && text !== undefined && text !== '') {
       doc.setFont('helvetica',
         opts.bold && opts.italic ? 'bolditalic'
@@ -101,50 +101,45 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
       const tx = align === 'right'  ? x2 - 1.5
                : align === 'center' ? (x1 + x2) / 2
                : x1 + 1.5;
-      // Clip text to cell width to prevent overflow
-      const maxW = x2 - x1 - 3;
-      doc.text(String(text), tx, y + h * 0.67, { align, maxWidth: maxW });
+      doc.text(String(text), tx, y + h * 0.67, { align, maxWidth: x2 - x1 - 3 });
     }
   };
 
-  // ── Helper : ligne complète 3 colonnes avec bordures propres ─
-  // Dessine toutes les cellules puis les bordures par-dessus
-  const row3 = (t1, t2, t3, h, o1 = {}, o2 = {}, o3 = {}) => {
-    cell(L,  C1, h, t1, o1);
-    cell(C1, C2, h, t2, o2);
-    cell(C2, R,  h, t3, o3);
-    // bordures : cadre externe + séparateurs internes
+  // Helper bordures d'une ligne : cadre global + separateurs internes
+  const borders = (h, seps) => {
     doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.3);
-    doc.rect(L, y, R - L, h);           // cadre global
-    doc.line(C1, y, C1, y + h);         // séparateur col1|col2
-    doc.line(C2, y, C2, y + h);         // séparateur col2|col3
-    y += h;
+    doc.rect(L, y, R - L, h);
+    seps.forEach(x => doc.line(x, y, x, y + h));
   };
 
-  // ── Helper : ligne pleine largeur (colspan 3) ─────────────
+  // Ligne 4 colonnes
+  const row4 = (t1, t2, t3, t4, h, o1={}, o2={}, o3={}, o4={}) => {
+    cell(L, C1, h, t1, o1); cell(C1, C2, h, t2, o2);
+    cell(C2, C3, h, t3, o3); cell(C3, R,  h, t4, o4);
+    borders(h, [C1, C2, C3]); y += h;
+  };
+
+  // Ligne pleine largeur (titre)
   const rowFull = (text, h, opts = {}) => {
     cell(L, R, h, text, opts);
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.3);
-    doc.rect(L, y, R - L, h);
-    y += h;
+    borders(h, []); y += h;
   };
 
-  // ── Helper : ligne 2 colonnes (libellé + valeur, sans milieu) ─
-  const row2 = (t1, t3, h, o1 = {}, o3 = {}) => {
-    cell(L, C1, h, t1, o1);
-    cell(C1, R, h, t3, o3);
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.3);
-    doc.rect(L, y, R - L, h);
-    doc.line(C1, y, C1, y + h);
-    y += h;
+  // Ligne periode : col1 | colspan col2-4
+  const rowPeriode = (t1, t234, h, o1={}, o234={}) => {
+    cell(L, C1, h, t1, o1); cell(C1, R, h, t234, o234);
+    borders(h, [C1]); y += h;
   };
 
-  // ── Données agent ──────────────────────────────────────
+  // Ligne standard : col1 label | col2 vide | colspan col3-4 valeur
+  const rowVal = (t1, t2, t34, h, o1={}, o2={}, o34={}) => {
+    cell(L, C1, h, t1, o1); cell(C1, C2, h, t2, o2); cell(C2, R, h, t34, o34);
+    borders(h, [C1, C2]); y += h;
+  };
+
+  // Donnees
   const nomComplet = `${(agent.nom || '').toUpperCase()} ${titleCase(agent.prenom || '')}`.trim();
-  function titleCase(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
 
   let dateEmb = '—';
   if (agent.date_embauche) {
@@ -160,7 +155,7 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
     if (moisAnc >= 12) { const ans = Math.floor(moisAnc / 12); anciennete = `${ans} an${ans > 1 ? 's' : ''}`; }
   }
 
-  const lastDay  = new Date(annee, mois, 0).getDate();
+  const lastDay   = new Date(annee, mois, 0).getDate();
   const dateDebut = `01/${String(mois).padStart(2, '0')}/${annee}`;
   const dateFin   = `${lastDay}/${String(mois).padStart(2, '0')}/${annee}`;
 
@@ -169,10 +164,9 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   const exoTraPlafond = fmtN(Math.min(imposable * 0.05, 30000));
   const exoFonPlafond = fmtN(Math.min(imposable * 0.05, 50000));
 
-  // Signataire RH
-  const signataires = Array.isArray(entreprise?.signataires) ? entreprise.signataires : [];
-  const rhSig = signataires.find(s => s.role === 'Responsable RH');
-  const nomRH = rhSig?.nom || entreprise?.representant || '—';
+  const signataires   = Array.isArray(entreprise?.signataires) ? entreprise.signataires : [];
+  const rhSig         = signataires.find(s => s.role === 'Responsable RH');
+  const nomRH         = rhSig?.nom || entreprise?.representant || '—';
 
   const autresRetTotal = (parseFloat(bulletin.autres_retenues) || 0) + (parseFloat(bulletin.avance_salaire) || 0);
   const autreVal = (parseFloat(bulletin.sursalaire) || 0) + (parseFloat(bulletin.prime_anciennete) || 0)
@@ -180,171 +174,166 @@ function drawBulletinOnDoc(doc, bulletin, agent, entreprise, mois, annee) {
   const salImposable = (bulletin.salaire_brut || 0) - (bulletin.cnss_salarial || 0);
   const personnesACharge = bulletin.personnes_a_charge != null ? bulletin.personnes_a_charge : (agent.charges_familiales || 0);
 
-  // ════ TABLEAU ════════════════════════════════════════════
+  // ════ TABLEAU (miroir BulletinPreview) ═══════════════════
 
-  // ── Titre ──
-  rowFull(`BULLETIN DE PAIE DE ${nomComplet}`, 7, {
-    bold: true, fs: 10, align: 'center', bg: ROUGE_CLAIR,
-  });
+  // Titre
+  rowFull(`BULLETIN DE PAIE DE ${nomComplet}`, 7, { bold: true, fs: 10, align: 'center', bg: ROUGE_CLAIR });
 
-  // ── Période ──
-  row2('Période du :', `${dateDebut} AU ${dateFin}`, 5.5,
-    { fs: 8.5 },
-    { fs: 8.5, align: 'center' });
+  // Periode
+  rowPeriode('Periode du :', `${dateDebut} AU ${dateFin}`, 5.5,
+    { fs: 8.5 }, { fs: 8.5, align: 'center' });
 
-  // ── En-têtes colonnes ──
-  row3('Employeur :', 'Organisme social', 'Employé', 5.5,
-    { bold: true, fs: 8.5 },
-    { bold: true, fs: 8.5, align: 'center' },
-    { bold: true, fs: 8.5, align: 'center' });
+  // En-tetes : Employeur | Organisme social | Employe | (vide)
+  row4('Employeur :', 'Organisme social', 'Employe', '', 5.5,
+    { bold: true, fs: 8.5 }, { bold: true, fs: 8.5, align: 'center' },
+    { bold: true, fs: 8.5, align: 'center' }, {});
 
-  // ── Bloc infos multi-lignes (hauteur fixe 26mm) ──
+  // Bloc infos 4 colonnes, hauteur 26mm
   const infoH = 26;
-  // Fonds
-  doc.setFillColor(255, 255, 255);
-  doc.rect(L, y, R - L, infoH, 'F');
-  // Bordures
+  doc.setFillColor(255, 255, 255); doc.rect(L, y, R - L, infoH, 'F');
   doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
   doc.rect(L, y, R - L, infoH);
-  doc.line(C1, y, C1, y + infoH);
-  doc.line(C2, y, C2, y + infoH);
+  [C1, C2, C3].forEach(x => doc.line(x, y, x, y + infoH));
 
-  let iy = y + 4;
-  // Employeur
+  // Col1 : entreprise
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NOIR);
-  doc.text(entreprise?.nom || 'FASO ARMORED', L + 1.5, iy);
-  iy += 4; doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+  doc.text(entreprise?.nom || 'FASO ARMORED', L + 1.5, y + 5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
   const infoParts = [];
-  if (entreprise?.telephone) infoParts.push(`Tél: ${entreprise.telephone}`);
+  if (entreprise?.telephone) infoParts.push(`Tel: ${entreprise.telephone}`);
   if (entreprise?.rccm) infoParts.push(`RCCM: ${entreprise.rccm}`);
   if (entreprise?.ifu) infoParts.push(`IFU: ${entreprise.ifu}`);
-  if (infoParts.length) { doc.text(infoParts.join(', '), L + 1.5, iy); iy += 3.5; }
-  doc.setTextColor(...NOIR); doc.text(`Date d'embauche : ${dateEmb}`, L + 1.5, iy);
+  if (infoParts.length) doc.text(infoParts.join(', '), L + 1.5, y + 10, { maxWidth: C1 - L - 3 });
 
-  // CNSS
+  // Col2 : CNSS
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...NOIR);
-  doc.text('Caisse Nationale de Sécurité Sociale', C1 + 1.5, y + 5);
-  doc.text('(CNSS)', C1 + 1.5, y + 9);
-  if (entreprise?.cnss_employeur) doc.text(`N° : ${entreprise.cnss_employeur}`, C1 + 1.5, y + 13.5);
+  doc.text('Caisse Nationale de', C1 + 1.5, y + 5);
+  doc.text('Securite Sociale (CNSS)', C1 + 1.5, y + 9);
+  if (entreprise?.cnss_employeur) doc.text(`N\u00B0 : ${entreprise.cnss_employeur}`, C1 + 1.5, y + 14);
 
-  // Employé
+  // Col3+4 : agent (fusionnes)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NOIR);
-  doc.text(nomComplet, C2 + 1.5, y + 5);
+  doc.text(nomComplet, C2 + 1.5, y + 5, { maxWidth: R - C2 - 3 });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
-  if (agent.cnss) doc.text(`N° CNSS : ${agent.cnss}`, C2 + 1.5, y + 10);
-
+  if (agent.cnss) doc.text(`N\u00B0 CNSS : ${agent.cnss}`, C2 + 1.5, y + 11);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+  doc.text(`Date d'embauche : ${dateEmb}`, C2 + 1.5, y + 17, { maxWidth: R - C2 - 3 });
   y += infoH;
 
-  // ── Emploi / Catégorie / Charges + Ancienneté ──
-  row3('Emploi', 'Catégorie', 'Charges familiales  /  Ancienneté', 5,
-    { fs: 8 }, { fs: 8 }, { fs: 7.5, align: 'center' });
-  row3(
+  // Emploi / Categorie / Charges familiales / Anciennete
+  row4('Emploi', 'Categorie', 'Charges familiales', 'Anciennete', 5,
+    { fs: 8 }, { fs: 8 }, { fs: 8 }, { fs: 8 });
+  row4(
     (agent.poste || '').toUpperCase(),
     (agent.categorie_socioprofessionnelle || agent.categorie || agent.type_contrat || '').toUpperCase(),
-    `${personnesACharge}  /  ${anciennete}`,
+    String(personnesACharge),
+    anciennete,
     5.5,
-    { bold: true, fs: 8 }, { bold: true, fs: 8 }, { bold: true, fs: 8, align: 'center' }
+    { bold: true, fs: 8 }, { bold: true, fs: 8 },
+    { bold: true, fs: 8, align: 'center' }, { bold: true, fs: 8 }
   );
 
-  // ── Salaire de base ──
-  row3('Salaire de base', '', fmtN(bulletin.salaire_base), 5.5,
+  // Salaire de base
+  rowVal('Salaire de base', '', fmtN(bulletin.salaire_base), 5.5,
     { bold: true, fs: 8.5 }, {}, { bold: true, fs: 8.5, align: 'right' });
 
-  // ── Indemnités ──
-  row3('Indemnités', '', '', 4.5, { fs: 8.5 }, {}, {});
-  const indRow = (label, val, greenBg) => row3(
+  // Indemnites
+  rowVal('Indemnites', '', '', 4.5, { fs: 8.5 }, {}, {});
+  const indRow = (label, val, greenBg) => rowVal(
     label, '', fmtN(val), 5,
-    { fs: 8, color: GRIS },
-    {},
-    { fs: 8, align: 'right', bg: greenBg && val > 0 ? [240, 244, 236] : undefined }
+    { fs: 8, color: GRIS }, {},
+    { fs: 8, align: 'right', bg: greenBg && parseFloat(val) > 0 ? VERT_CLAIR : undefined }
   );
-  indRow('   - logement',  bulletin.indemnite_logement,  true);
-  indRow('   - transport', bulletin.indemnite_transport,  false);
-  indRow('   - fonction',  bulletin.indemnite_fonction,   true);
+  indRow('   - logement',  bulletin.indemnite_logement, true);
+  indRow('   - transport', bulletin.indemnite_transport, false);
+  indRow('   - fonction',  bulletin.indemnite_fonction,  true);
   indRow('   - autre',     autreVal, false);
 
-  // ── Salaire brut ──
-  row3('Salaire brut', '', fmtN(bulletin.salaire_brut), 5.5,
+  // Salaire brut
+  rowVal('Salaire brut', '', fmtN(bulletin.salaire_brut), 5.5,
     { bold: true, fs: 8.5 }, {}, { bold: true, fs: 8.5, align: 'right' });
 
-  // ── CNSS salarial ──
-  row3('CNSS', '', fmtN(bulletin.cnss_salarial), 5,
+  // CNSS salarial
+  rowVal('CNSS', '', fmtN(bulletin.cnss_salarial), 5,
     { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Salaire imposable ──
-  row3('Salaire imposable', '', fmtN(salImposable), 5,
+  // Salaire imposable
+  rowVal('Salaire imposable', '', fmtN(salImposable), 5,
     { fs: 8.5 }, {}, { fs: 8.5, align: 'right' });
 
-  // ── Contrôle CNSS fiscal ──
-  row3('Contrôle CNSS (fiscal)', '', fmtN(bulletin.controle_cnss_fiscal), 5,
+  // Controle CNSS fiscal
+  rowVal('Controle CNSS (fiscal)', '', fmtN(bulletin.controle_cnss_fiscal), 5,
     { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Salaire imposable IUTS ──
-  row3('Salaire imposable IUTS', '', fmtN(bulletin.salaire_brut_imposable), 5.5,
+  // Salaire imposable IUTS
+  rowVal('Salaire imposable IUTS', '', fmtN(bulletin.salaire_brut_imposable), 5.5,
     { bold: true, fs: 8.5 }, {}, { bold: true, fs: 8.5, align: 'right' });
 
-  // ── Contrôle des indemnités ──
-  row3('Contrôle des indemnités', '', '', 4.5, { fs: 8.5 }, {}, {});
-  const exoRow = (label, plafond, retenu) => row3(
-    label, plafond, retenu, 5,
-    { fs: 8, color: GRIS }, { fs: 8, align: 'right' }, { fs: 8, align: 'right' }
-  );
+  // Controle des indemnites (col2=plafond, col3-4=retenu)
+  rowVal('Controle des indemnites', '', '', 4.5, { fs: 8.5 }, {}, {});
+  const exoRow = (label, plafond, retenu) => {
+    cell(L, C1, 5, label, { fs: 8, color: GRIS });
+    cell(C1, C2, 5, plafond, { fs: 8, align: 'right' });
+    cell(C2, R, 5, retenu, { fs: 8, align: 'right' });
+    borders(5, [C1, C2]); y += 5;
+  };
   exoRow('   - logement',  exoLogPlafond, fmtN(bulletin.exo_logement));
   exoRow('   - transport', exoTraPlafond, fmtN(bulletin.exo_transport));
   exoRow('   - fonction',  exoFonPlafond, fmtN(bulletin.exo_fonction));
 
-  // ── Total exonérations ──
-  row3('Total exonérations', '', fmtN(bulletin.total_exonerations), 5,
+  // Total exonerations
+  rowVal('Total exonerations', '', fmtN(bulletin.total_exonerations), 5,
     { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Abattement forfaitaire ──
-  row3('Abattement forf.', '', fmtN(bulletin.abattement_forfaitaire), 5,
+  // Abattement forfaitaire
+  rowVal('Abattement forf.', '', fmtN(bulletin.abattement_forfaitaire), 5,
     { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Base IUTS ──
-  row3('Base IUTS', '', fmtN(bulletin.base_iuts), 5.5,
+  // Base IUTS
+  rowVal('Base IUTS', '', fmtN(bulletin.base_iuts), 5.5,
     { fs: 8.5 }, {}, { fs: 8.5, align: 'right' });
 
-  // ── IUTS brut ──
-  row3('IUTS', '', fmtN(bulletin.iuts_brut), 5,
+  // IUTS brut
+  rowVal('IUTS', '', fmtN(bulletin.iuts_brut), 5,
     { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Personnes à charge ──
-  row3('Personnes à charge', '', String(personnesACharge), 5,
+  // Personnes a charge (0 inclus, pas de fmt)
+  rowVal('Personnes a charge', '', String(personnesACharge), 5,
     { fs: 8.5 }, {}, { fs: 8.5, align: 'right' });
 
-  // ── Abattement familial ──
-  row3('Abattement', '', fmtN(bulletin.abattement_familial), 5,
+  // Abattement familial
+  rowVal('Abattement', '', fmtN(bulletin.abattement_familial), 5,
     { fs: 8.5 }, {}, { fs: 8.5, align: 'right' });
 
-  // ── Net IUTS ──
-  row3('Net IUTS', '', fmtN(bulletin.iuts), 5.5,
-    { italic: true, bold: true, fs: 8.5 }, {}, { italic: true, bold: true, fs: 8.5, align: 'right' });
+  // Net IUTS
+  rowVal('Net IUTS', '', fmtN(bulletin.iuts), 5,
+    { italic: true, fs: 8.5 }, {}, { italic: true, fs: 8.5, align: 'right' });
 
-  // ── Retenues diverses ──
-  row3('Retenues acomptes', '', '', 5, { fs: 8.5 }, {}, {});
-  row3('Retenues prêts', '', '', 5, { fs: 8.5 }, {}, {});
-  row3('Autres retenues', '', fmtN(autresRetTotal), 5,
+  // Retenues
+  rowVal('Retenues acomptes', '', '', 5, { fs: 8.5 }, {}, {});
+  rowVal('Retenues prets', '', '', 5, { fs: 8.5 }, {}, {});
+  rowVal('Autres retenues', '', fmtN(autresRetTotal), 5,
     { fs: 8.5 }, {}, { fs: 8.5, align: 'right' });
 
-  // ── Salaire net ──
-  row3('Salaire net', '', fmtN(bulletin.salaire_net), 7,
+  // Salaire net
+  rowVal('Salaire net', '', fmtN(bulletin.salaire_net), 7,
     { bold: true, fs: 10 }, {}, { bold: true, fs: 10, align: 'right' });
 
   y += 8;
 
-  // ── Signatures ──────────────────────────────────────────
+  // Signatures (miroir grid 1fr 1fr de BulletinPreview)
   if (y > 250) { doc.addPage(); y = 20; }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NOIR);
-  doc.text('Le Responsable RH', 52, y, { align: 'center' });
-  doc.text("L'employé", 163, y, { align: 'center' });
-  y += 18;
+  doc.text('Le Responsable RH', L, y);
+  doc.text("L'employe", R, y, { align: 'right' });
+  y += 20;
   doc.setDrawColor(...NOIR); doc.setLineWidth(0.4);
-  doc.line(14, y, 90, y);
-  doc.line(126, y, 196, y);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...NOIR);
-  doc.text(nomRH, 52, y + 4, { align: 'center' });
-  doc.text(nomComplet, 163, y + 4, { align: 'center' });
+  doc.line(L, y, L + 76, y);
+  doc.line(R - 76, y, R, y);
+  y += 4;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  doc.text(nomRH, L, y);
+  doc.text(nomComplet, R, y, { align: 'right' });
 }
 
 async function generateBulletinsGroupesPDF(mois, annee, agents, entreprise, onProgress, avancesParAgent = {}) {
