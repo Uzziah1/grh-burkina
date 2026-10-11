@@ -33,10 +33,12 @@ export default function Login({ onLogin, inviteMode = false }) {
 
   const inputBase = {
     width: '100%', boxSizing: 'border-box',
-    padding: '13px 16px 13px 44px',
-    border: '1.5px solid #E5E7EB',
-    borderRadius: 10, fontSize: 14,
-    color: '#111827', background: '#fff',
+    padding: '12px 16px 12px 44px',
+    border: 'none',
+    borderBottom: '1.5px solid #E5E7EB',
+    borderRadius: 0,
+    fontSize: 14,
+    color: '#111827', background: 'transparent',
     outline: 'none', fontFamily: 'inherit',
     transition: 'border-color 0.2s',
   };
@@ -93,45 +95,52 @@ export default function Login({ onLogin, inviteMode = false }) {
 
       {/* ── DROITE : panneau formulaire blanc ─────────────────── */}
       <div style={{
-        width: 460,
+        width: 520,
         flexShrink: 0,
         background: '#fff',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '48px 52px',
+        padding: '56px 60px',
         overflowY: 'auto',
         boxShadow: '-4px 0 40px rgba(0,0,0,0.10)',
       }}>
-        <div style={{ width: '100%', maxWidth: 360 }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
 
           {/* Logo */}
-          <div style={{ marginBottom: 36 }}>
+          <div style={{ marginBottom: 40 }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12,
-              marginBottom: 24,
+              marginBottom: 28,
             }}>
+              {/* Icône SVG briefcase/RH */}
               <div style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: 'linear-gradient(135deg, #E8920A, #f0a830)',
+                width: 48, height: 48, borderRadius: 14,
+                background: 'linear-gradient(135deg, #E8920A 0%, #f5a623 100%)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(232,146,10,0.35)',
+                boxShadow: '0 4px 16px rgba(232,146,10,0.40)',
+                flexShrink: 0,
               }}>
-                <span style={{ fontSize: 22 }}>👥</span>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
               </div>
-              <span style={{ fontSize: 22, fontWeight: 800, color: '#111827', letterSpacing: '-0.5px' }}>
-                RH Manager
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#111827', letterSpacing: '0.5px' }}>
+                RH MANAGER
               </span>
             </div>
 
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
-              {inviteMode ? 'Définissez votre mot de passe' : 'Bienvenue !'}
+            <h2 style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
+              {inviteMode ? 'Définissez votre mot de passe' : '¡Bienvenue sur RH MANAGER!'}
             </h2>
-            <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>
+            <p style={{ fontSize: 13, color: '#9CA3AF', margin: 0, lineHeight: 1.5 }}>
               {inviteMode
                 ? 'Créez un mot de passe sécurisé pour accéder à votre compte.'
-                : 'Connectez-vous pour accéder à votre espace RH.'}
+                : 'Pour continuer, renseignez votre adresse email et votre mot de passe.'}
             </p>
           </div>
 
@@ -161,14 +170,14 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword(e.target.value)}
                     required autoFocus
                     style={{ ...inputBase, paddingRight: 44 }}
-                    onFocus={e => e.target.style.borderColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
                   />
                   <ToggleEye show={showPassword} onToggle={() => setShowPassword(v => !v)} />
                 </InputIcon>
               </Field>
 
-              <Field label="Confirmer le mot de passe" style={{ marginBottom: 28 }}>
+              <Field label="Confirmer le mot de passe" style={{ marginBottom: 36 }}>
                 <InputIcon icon={<Lock size={17} />}>
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -177,8 +186,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword2(e.target.value)}
                     required
                     style={inputBase}
-                    onFocus={e => e.target.style.borderColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
                   />
                 </InputIcon>
               </Field>
@@ -200,13 +209,13 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setEmail(e.target.value)}
                     required autoFocus
                     style={inputBase}
-                    onFocus={e => e.target.style.borderColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
                   />
                 </InputIcon>
               </Field>
 
-              <Field label="Mot de passe" style={{ marginBottom: 28 }}>
+              <Field label="Mot de passe" style={{ marginBottom: 36 }}>
                 <InputIcon icon={<Lock size={17} />}>
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -215,8 +224,8 @@ export default function Login({ onLogin, inviteMode = false }) {
                     onChange={e => setPassword(e.target.value)}
                     required
                     style={{ ...inputBase, paddingRight: 44 }}
-                    onFocus={e => e.target.style.borderColor = '#E8920A'}
-                    onBlur={e => e.target.style.borderColor = '#E5E7EB'}
+                    onFocus={e => e.target.style.borderBottomColor = '#E8920A'}
+                    onBlur={e => e.target.style.borderBottomColor = '#E5E7EB'}
                   />
                   <ToggleEye show={showPassword} onToggle={() => setShowPassword(v => !v)} />
                 </InputIcon>
@@ -253,10 +262,11 @@ export default function Login({ onLogin, inviteMode = false }) {
 
 function Field({ label, children, style }) {
   return (
-    <div style={{ marginBottom: 16, ...style }}>
+    <div style={{ marginBottom: 20, ...style }}>
       <label style={{
-        display: 'block', fontSize: 12, fontWeight: 600,
-        color: '#374151', marginBottom: 6, letterSpacing: 0.2,
+        display: 'block', fontSize: 11, fontWeight: 600,
+        color: '#9CA3AF', marginBottom: 4, letterSpacing: 0.8,
+        textTransform: 'uppercase',
       }}>
         {label}
       </label>
@@ -305,10 +315,10 @@ function SubmitBtn({ loading, icon, children }) {
       type="submit"
       disabled={loading}
       style={{
-        width: '100%', padding: '14px',
+        width: '100%', padding: '16px',
         background: loading ? '#f0a830' : '#E8920A',
-        color: '#fff', border: 'none', borderRadius: 10,
-        fontSize: 14, fontWeight: 700,
+        color: '#fff', border: 'none', borderRadius: 8,
+        fontSize: 15, fontWeight: 700,
         cursor: loading ? 'not-allowed' : 'pointer',
         display: 'flex', alignItems: 'center',
         justifyContent: 'center', gap: 8,
