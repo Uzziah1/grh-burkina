@@ -4,7 +4,10 @@
 // PDF/Excel export, print, black & white preview
 // Access restricted to admin/rh roles (voirPaie permission)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 20;
 import { supabase } from '../lib/supabase';
 import { peutFaire } from '../lib/useProfil';
 import { calculerBulletin } from '../lib/calcPaie';
@@ -688,6 +691,7 @@ export default function Paie({ agents, entreprise, profil }) {
   const [modal, setModal] = useState(false);
   const [viewModal, setViewModal] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [filterMois, setFilterMois] = useState(NOW.getMonth() + 1);
   const [filterAnnee, setFilterAnnee] = useState(NOW.getFullYear());
   const [saving, setSaving] = useState(false);
@@ -1022,11 +1026,14 @@ export default function Paie({ agents, entreprise, profil }) {
   }
 
   // ── Filter bulletins ──
-  const filtered = bulletins.filter(b => {
+  const filtered = useMemo(() => bulletins.filter(b => {
     if (!search) return true;
     const name = `${b.agents?.prenom} ${b.agents?.nom}`.toLowerCase();
     return name.includes(search.toLowerCase());
-  });
+  }), [bulletins, search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ── Stats ──
   const totalNet  = bulletins.reduce((s, b) => s + (b.salaire_net || 0), 0);
@@ -1162,7 +1169,7 @@ export default function Paie({ agents, entreprise, profil }) {
               className="search-input"
               placeholder="Rechercher..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
               style={{ paddingLeft: 32, width: 200, fontSize: 12 }}
             />
           </div>
@@ -1190,10 +1197,10 @@ export default function Paie({ agents, entreprise, profil }) {
                 <tr><td colSpan="9" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                   Aucun bulletin pour cette période
                 </td></tr>
-              ) : filtered.map((b, idx) => {
+              ) : paginated.map((b, idx) => {
                 return (
                   <tr key={b.id}>
-                    <td style={{ textAlign: 'center', color: '#A3A3A3', fontSize: 12, fontWeight: 500 }}>{idx + 1}</td>
+                    <td style={{ textAlign: 'center', color: '#A3A3A3', fontSize: 12, fontWeight: 500 }}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
                     <td>
                       <div>
                         <div style={{ fontWeight: 600 }}>{b.agents?.prenom} {b.agents?.nom}</div>
@@ -1234,6 +1241,9 @@ export default function Paie({ agents, entreprise, profil }) {
               })}
             </tbody>
           </table>
+        </div>
+        <div style={{ padding: '0 20px' }}>
+          <Pagination page={page} totalPages={totalPages} total={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       </div>
 

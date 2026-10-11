@@ -2,7 +2,7 @@
 // Fonctionnalités : dépôt de demande, approbation/refus, suivi des montants,
 //                  génération du document de demande d'avance en PDF
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate, formatMontant, getInitials, avatarColor } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
@@ -11,6 +11,9 @@ import {
   Clock, CheckCircle, Search, TrendingUp, FileText,
 } from 'lucide-react';
 import { generateAvance } from '../lib/generatePDF';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 20;
 
 // ── Notification toast ────────────────────────────────────
 function showToast(msg, type = 'success') {
@@ -30,7 +33,11 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Composant principal Avances ───────────────────────────
-export default function Avances({ avances, agents, onRefresh, profil, entreprise }) {
+export default function Avances({ agents, profil, entreprise }) {
+  const [avances, setAvances] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ total: 0, enAttente: 0, approuves: 0, totalMontant: 0 });
+  const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
@@ -40,6 +47,46 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     motif: '',
   });
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const loadAvances = useCallback(async () => {
+    setDataLoading(true);
+    const from = (page - 1) * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
+    let q = supabase
+      .from('avances')
+      .select('*,agents(nom,prenom)', { count: 'exact' })
+      .order('created_at', { ascending: false });
+    if (filterStatut) q = q.eq('statut', filterStatut);
+    if (search) {
+      const matched = agents.filter(a =>
+        `${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase())
+      ).map(a => a.id);
+      if (matched.length === 0) { setAvances([]); setTotal(0); setDataLoading(false); return; }
+      q = q.in('agent_id', matched);
+    }
+    q = q.range(from, to);
+    const { data, count } = await q;
+    setAvances(data || []);
+    setTotal(count || 0);
+    setDataLoading(false);
+  }, [page, search, filterStatut, agents]);
+
+  const loadStats = useCallback(async () => {
+    const { data } = await supabase.from('avances').select('statut,montant');
+    const all = data || [];
+    setStats({
+      total:        all.length,
+      enAttente:    all.filter(a => a.statut === 'En attente').length,
+      approuves:    all.filter(a => a.statut === 'Approuvé').length,
+      totalMontant: all.filter(a => a.statut === 'Approuvé').reduce((s, a) => s + (parseFloat(a.montant) || 0), 0),
+    });
+  }, []);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadAvances(); }, [loadAvances]);
 
   // Mise à jour d'un champ du formulaire
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
@@ -59,14 +106,6 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
       showToast('Impossible de générer le document. Réessayez.', 'error');
     }
   }
-
-  // ── Filtrage de la liste ──────────────────────────────
-  const filtered = avances.filter(a => {
-    const name = `${a.agents?.prenom || ''} ${a.agents?.nom || ''}`.toLowerCase();
-    if (search && !name.includes(search.toLowerCase())) return false;
-    if (filterStatut && a.statut !== filterStatut) return false;
-    return true;
-  });
 
   // ── Enregistrement d'une nouvelle demande ─────────────
   async function handleSubmit() {
@@ -91,7 +130,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
         date_demande: new Date().toISOString().split('T')[0],
         motif: '',
       });
-      onRefresh();
+      loadAvances(); loadStats();
     }
     setLoading(false);
   }
@@ -101,7 +140,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     const { error } = await supabase.from('avances').update({ statut }).eq('id', id);
     if (error) { showToast('Impossible de mettre à jour la demande. Réessayez.', 'error'); return; }
     showToast(statut === 'Approuvé' ? 'Demande approuvée' : statut === 'Rejeté' ? 'Demande rejetée' : 'Statut mis à jour');
-    onRefresh();
+    loadAvances(); loadStats();
   }
 
   // ── Suppression d'une demande ─────────────────────────
@@ -109,15 +148,8 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('avances').delete().eq('id', id);
     showToast('Demande d\'avance supprimée');
-    onRefresh();
+    loadAvances(); loadStats();
   }
-
-  // ── Statistiques ──────────────────────────────────────
-  const enAttente    = avances.filter(a => a.statut === 'En attente').length;
-  const approuves    = avances.filter(a => a.statut === 'Approuvé').length;
-  const totalMontant = avances
-    .filter(a => a.statut === 'Approuvé')
-    .reduce((s, a) => s + (parseFloat(a.montant) || 0), 0);
 
   return (
     <div>
@@ -128,10 +160,10 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
         gap: 16, marginBottom: 24,
       }}>
         {[
-          { label: 'Total demandes',   value: avances.length,                         icon: DollarSign,  color: '#E8920A' },
-          { label: 'En attente',       value: enAttente,                              icon: Clock,       color: '#D97706' },
-          { label: 'Approuvées',       value: approuves,                              icon: CheckCircle, color: '#16A34A' },
-          { label: 'Montant approuvé', value: `${Math.round(totalMontant / 1000)}K FCFA`, icon: TrendingUp,  color: '#2563EB' },
+          { label: 'Total demandes',   value: stats.total,                                        icon: DollarSign,  color: '#E8920A' },
+          { label: 'En attente',       value: stats.enAttente,                                    icon: Clock,       color: '#D97706' },
+          { label: 'Approuvées',       value: stats.approuves,                                    icon: CheckCircle, color: '#16A34A' },
+          { label: 'Montant approuvé', value: `${Math.round(stats.totalMontant / 1000)}K FCFA`,   icon: TrendingUp,  color: '#2563EB' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -156,7 +188,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
       {/* ── Tableau des demandes ── */}
       <div className="card">
         <div className="card-header">
-          <h3>Avances sur salaire ({filtered.length})</h3>
+          <h3>Avances sur salaire ({total})</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
             {/* Recherche par nom */}
@@ -169,7 +201,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
                 className="search-input"
                 placeholder="Rechercher..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
                 style={{ paddingLeft: 32, width: 180, fontSize: 12 }}
               />
             </div>
@@ -178,7 +210,7 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
             <select
               className="filter-select"
               value={filterStatut}
-              onChange={e => setFilterStatut(e.target.value)}
+              onChange={e => { setFilterStatut(e.target.value); setPage(1); }}
               style={{ fontSize: 12 }}
             >
               <option value="">Tous les statuts</option>
@@ -210,13 +242,19 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {dataLoading ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                    Chargement...
+                  </td>
+                </tr>
+              ) : avances.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                     Aucune demande d'avance
                   </td>
                 </tr>
-              ) : filtered.map(a => (
+              ) : avances.map(a => (
                 <tr key={a.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -293,6 +331,17 @@ export default function Avances({ avances, agents, onRefresh, profil, entreprise
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* ── Pagination ── */}
+        <div style={{ padding: '0 20px' }}>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       </div>
 

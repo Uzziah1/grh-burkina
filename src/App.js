@@ -17,6 +17,7 @@ import Paie from './pages/Paie';
 import Historique from './pages/Historique';
 import EtatSalaires from './pages/EtatSalaires';
 import Badge from './pages/Badge';
+import Archives from './pages/Archives';
 
 function SkeletonApp() {
   return (
@@ -123,7 +124,7 @@ function FicheWrapper({ agents, entreprise, profil }) {
 }
 
 // ── AppRoutes : routes internes (user connecté) ──────────────
-function AppRoutes({ user, profil, agents, conges, avances, entreprise, loadData }) {
+function AppRoutes({ user, profil, agents, entreprise, loadData }) {
   const navigate = useNavigate();
   const openFiche = (id) => navigate(`/agents/${id}`);
 
@@ -135,8 +136,8 @@ function AppRoutes({ user, profil, agents, conges, avances, entreprise, loadData
         <Route path="/agents" element={<Agents agents={agents} onRefresh={loadData} entreprise={entreprise} onOpenFiche={openFiche} profil={profil} />} />
         <Route path="/agents/:agentId" element={<FicheWrapper agents={agents} entreprise={entreprise} profil={profil} />} />
         <Route path="/contrats" element={<Contrats agents={agents} onOpenFiche={openFiche} />} />
-        <Route path="/conges" element={<Conges conges={conges} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
-        <Route path="/avances" element={<Avances avances={avances} agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
+        <Route path="/conges" element={<Conges agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
+        <Route path="/avances" element={<Avances agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
         <Route path="/paie" element={<Paie agents={agents} onRefresh={loadData} profil={profil} entreprise={entreprise} />} />
         <Route path="/etat-salaires" element={<EtatSalaires entreprise={entreprise} profil={profil} />} />
         <Route path="/documents" element={<Documents agents={agents} entreprise={entreprise} profil={profil} />} />
@@ -144,6 +145,7 @@ function AppRoutes({ user, profil, agents, conges, avances, entreprise, loadData
         <Route path="/historique" element={<Historique />} />
         <Route path="/entreprise" element={<Entreprise onRefresh={loadData} />} />
         <Route path="/utilisateurs" element={<Utilisateurs profil={profil} />} />
+        <Route path="/archives" element={<Archives profil={profil} />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Layout>
@@ -159,8 +161,6 @@ export default function App() {
     } catch { return null; }
   });
   const [agents, setAgents] = useState([]);
-  const [conges, setConges] = useState([]);
-  const [avances, setAvances] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
   const [loading, setLoading] = useState(true);
   // true = l'utilisateur vient de cliquer sur un lien d'invitation et doit définir son mdp
@@ -219,15 +219,11 @@ export default function App() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
-    const [a, cg, av, ent] = await Promise.all([
+    const [a, ent] = await Promise.all([
       supabase.from('agents').select('*').order('nom'),
-      supabase.from('conges').select('*,agents(nom,prenom)').order('created_at', { ascending: false }),
-      supabase.from('avances').select('*,agents(nom,prenom)').order('created_at', { ascending: false }),
       supabase.from('entreprise').select('*').limit(1).single(),
     ]);
     setAgents(a.data || []);
-    setConges(cg.data || []);
-    setAvances(av.data || []);
     setEntreprise(ent.data || {});
   }
 
@@ -244,8 +240,6 @@ export default function App() {
         user={user}
         profil={profil}
         agents={agents}
-        conges={conges}
-        avances={avances}
         entreprise={entreprise}
         loadData={loadData}
       />

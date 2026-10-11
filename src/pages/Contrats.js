@@ -1,7 +1,10 @@
 // Contrats.js - CDD contract tracking page
 // Displays contract status, expiry alerts and timeline
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 20;
 import { formatDate, joursRestants, getInitials, avatarColor } from '../lib/helpers';
 import {
   FileText, AlertTriangle, CheckCircle,
@@ -21,14 +24,23 @@ function JoursBadge({ dateFin }) {
 // ── Main Contrats component ───────────────────────────────
 export default function Contrats({ agents, onOpenFiche }) {
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   // ── Filter CDD agents ──
-  const cddAgents = agents
+  const cddAgents = useMemo(() => agents
     .filter(a => a.type_contrat === 'CDD')
     .filter(a => {
       if (!search) return true;
       return `${a.prenom} ${a.nom} ${a.poste}`.toLowerCase().includes(search.toLowerCase());
-    });
+    })
+    .sort((a, b) => {
+      const da = joursRestants(a.date_fin_contrat) ?? 9999;
+      const db = joursRestants(b.date_fin_contrat) ?? 9999;
+      return da - db;
+    }), [agents, search]);
+
+  const totalPages = Math.ceil(cddAgents.length / PAGE_SIZE);
+  const paginated  = cddAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ── Compute stats ──
   const total    = cddAgents.length;
@@ -126,7 +138,7 @@ export default function Contrats({ agents, onOpenFiche }) {
               className="search-input"
               placeholder="Rechercher..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
               style={{ paddingLeft: 32, width: 200, fontSize: 12 }}
             />
           </div>
@@ -147,7 +159,7 @@ export default function Contrats({ agents, onOpenFiche }) {
               </tr>
             </thead>
             <tbody>
-              {cddAgents.length === 0 ? (
+              {paginated.length === 0 ? (
                 <tr>
                   <td colSpan="8" style={{
                     textAlign: 'center', padding: 48,
@@ -156,14 +168,7 @@ export default function Contrats({ agents, onOpenFiche }) {
                     {search ? 'Aucun résultat pour cette recherche' : 'Aucun contrat CDD'}
                   </td>
                 </tr>
-              ) : cddAgents
-                  // Sort by days remaining (ascending — most urgent first)
-                  .sort((a, b) => {
-                    const da = joursRestants(a.date_fin_contrat) ?? 9999;
-                    const db = joursRestants(b.date_fin_contrat) ?? 9999;
-                    return da - db;
-                  })
-                  .map(a => {
+              ) : paginated.map(a => {
                     const c = avatarColor(a.nom);
                     const diff = joursRestants(a.date_fin_contrat);
                     const isUrgent = diff !== null && diff >= 0 && diff <= 30;
@@ -216,6 +221,17 @@ export default function Contrats({ agents, onOpenFiche }) {
               }
             </tbody>
           </table>
+        </div>
+
+        {/* ── Pagination ── */}
+        <div style={{ padding: '0 20px' }}>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={cddAgents.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ import { peutFaire } from '../lib/useProfil';
 import {
   LayoutDashboard, Users, FileText, Calendar,
   DollarSign, FolderOpen, Building2, UserCog,
-  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList, CreditCard, Menu, X,
+  LogOut, ChevronRight, ChevronLeft, Banknote, History, ClipboardList, CreditCard, Menu, X, Archive,
 } from 'lucide-react';
 
 // ── App version ────────────────────────────────────────────
@@ -26,6 +26,7 @@ const mainNavItems = [
   { id: 'documents',    path: '/documents',      label: 'Documents',         permission: 'voirDocuments',    icon: FolderOpen },
   { id: 'badges',       path: '/badges',         label: 'Badges',            permission: 'voirDocuments',    icon: CreditCard },
   { id: 'historique',   path: '/historique',     label: 'Journalisation',    permission: 'voirAgents',       icon: History },
+  { id: 'archives',     path: '/archives',       label: 'Archives',          permission: null,               icon: Archive },
 ];
 
 const settingsNavItems = [
@@ -47,6 +48,7 @@ const pageTitles = {
   '/entreprise':     'Mon Entreprise',
   '/utilisateurs':   'Gestion des utilisateurs',
   '/historique':     'Historique des modifications',
+  '/archives':       'Archives',
 };
 
 function getPageTitle(pathname) {

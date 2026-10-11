@@ -2,7 +2,7 @@
 // Fonctionnalités : dépôt, approbation/refus, calcul auto des jours ouvrables,
 //                  génération PDF de l'autorisation de congé
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDate, getInitials, avatarColor } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
@@ -11,6 +11,9 @@ import {
   Calendar, Plus, Check, X, Trash2,
   Clock, CheckCircle, XCircle, Search, FileText,
 } from 'lucide-react';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 20;
 
 // ── Notification toast ────────────────────────────────────
 function showToast(msg, type = 'success') {
@@ -48,7 +51,11 @@ function calculerJoursOuvrables(dateDebut, dateFin) {
 }
 
 // ── Composant principal Conges ────────────────────────────
-export default function Conges({ conges, agents, onRefresh, profil, entreprise }) {
+export default function Conges({ agents, profil, entreprise }) {
+  const [conges, setConges] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ total: 0, enAttente: 0, approuves: 0, refuses: 0 });
+  const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
@@ -57,6 +64,47 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     nombre_jours: '', motif: 'Congé annuel payé',
   });
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const loadConges = useCallback(async () => {
+    setDataLoading(true);
+    const from = (page - 1) * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
+    let q = supabase
+      .from('conges')
+      .select('*,agents(nom,prenom)', { count: 'exact' })
+      .order('created_at', { ascending: false });
+    if (filterStatut) q = q.eq('statut', filterStatut);
+    if (search) {
+      // Filter by agent name via agents relation
+      const matched = agents.filter(a =>
+        `${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase())
+      ).map(a => a.id);
+      if (matched.length === 0) { setConges([]); setTotal(0); setDataLoading(false); return; }
+      q = q.in('agent_id', matched);
+    }
+    q = q.range(from, to);
+    const { data, count } = await q;
+    setConges(data || []);
+    setTotal(count || 0);
+    setDataLoading(false);
+  }, [page, search, filterStatut, agents]);
+
+  const loadStats = useCallback(async () => {
+    const { data } = await supabase.from('conges').select('statut');
+    const all = data || [];
+    setStats({
+      total:     all.length,
+      enAttente: all.filter(c => c.statut === 'En attente').length,
+      approuves: all.filter(c => c.statut === 'Approuvé').length,
+      refuses:   all.filter(c => c.statut === 'Refusé').length,
+    });
+  }, []);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadConges(); }, [loadConges]);
 
   // Mise à jour d'un champ du formulaire
   function setF(key, val) {
@@ -117,7 +165,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
       showToast('Demande de congé enregistrée avec succès');
       setModal(false);
       setForm({ agent_id: '', date_debut: '', date_fin: '', nombre_jours: '', motif: 'Congé annuel payé' });
-      onRefresh();
+      loadConges(); loadStats();
     }
     setLoading(false);
   }
@@ -127,7 +175,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     const { error } = await supabase.from('conges').update({ statut }).eq('id', id);
     if (error) { showToast('Impossible de mettre à jour la demande. Réessayez.', 'error'); return; }
     showToast(statut === 'Approuvé' ? 'Congé approuvé' : statut === 'Rejeté' ? 'Congé rejeté' : 'Statut mis à jour');
-    onRefresh();
+    loadConges(); loadStats();
   }
 
   // ── Suppression d'une demande ─────────────────────────
@@ -135,13 +183,8 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
     if (!window.confirm('Supprimer cette demande ?')) return;
     await supabase.from('conges').delete().eq('id', id);
     showToast('Demande de congé supprimée');
-    onRefresh();
+    loadConges(); loadStats();
   }
-
-  // ── Statistiques ──────────────────────────────────────
-  const enAttente = conges.filter(c => c.statut === 'En attente').length;
-  const approuves = conges.filter(c => c.statut === 'Approuvé').length;
-  const refuses   = conges.filter(c => c.statut === 'Refusé').length;
 
   return (
     <div>
@@ -152,10 +195,10 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
         gap: 16, marginBottom: 24,
       }}>
         {[
-          { label: 'Total demandes', value: conges.length, icon: Calendar,    color: '#E8920A' },
-          { label: 'En attente',     value: enAttente,     icon: Clock,       color: '#D97706' },
-          { label: 'Approuvés',      value: approuves,     icon: CheckCircle, color: '#16A34A' },
-          { label: 'Refusés',        value: refuses,       icon: XCircle,     color: '#DC2626' },
+          { label: 'Total demandes', value: stats.total,     icon: Calendar,    color: '#E8920A' },
+          { label: 'En attente',     value: stats.enAttente, icon: Clock,       color: '#D97706' },
+          { label: 'Approuvés',      value: stats.approuves, icon: CheckCircle, color: '#16A34A' },
+          { label: 'Refusés',        value: stats.refuses,   icon: XCircle,     color: '#DC2626' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -178,7 +221,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
       {/* ── Tableau des demandes ── */}
       <div className="card">
         <div className="card-header">
-          <h3>Demandes de congés ({filtered.length})</h3>
+          <h3>Demandes de congés ({total})</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
             {/* Recherche par nom */}
@@ -191,7 +234,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
                 className="search-input"
                 placeholder="Rechercher..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
                 style={{ paddingLeft: 32, width: 180, fontSize: 12 }}
               />
             </div>
@@ -200,7 +243,7 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
             <select
               className="filter-select"
               value={filterStatut}
-              onChange={e => setFilterStatut(e.target.value)}
+              onChange={e => { setFilterStatut(e.target.value); setPage(1); }}
               style={{ fontSize: 12 }}
             >
               <option value="">Tous les statuts</option>
@@ -233,13 +276,19 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {dataLoading ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
+                    Chargement...
+                  </td>
+                </tr>
+              ) : conges.length === 0 ? (
                 <tr>
                   <td colSpan="7" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                     Aucune demande de congé
                   </td>
                 </tr>
-              ) : filtered.map(c => {
+              ) : conges.map(c => {
                 const av = avatarColor(c.agents?.nom || '');
                 return (
                   <tr key={c.id}>
@@ -313,6 +362,9 @@ export default function Conges({ conges, agents, onRefresh, profil, entreprise }
               })}
             </tbody>
           </table>
+        </div>
+        <div style={{ padding: '0 20px' }}>
+          <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       </div>
 

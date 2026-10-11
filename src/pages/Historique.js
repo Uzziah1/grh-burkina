@@ -1,13 +1,14 @@
 // Historique.js - Audit trail page
 // Tracks all create/update/delete actions on agents, contracts, leaves, advances
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   History, Search, UserPlus,
   Pencil, Trash2, FileText,
   Calendar, DollarSign, RefreshCw,
 } from 'lucide-react';
+import Pagination from '../components/Pagination';
 
 // ── Action config ─────────────────────────────────────────
 const ACTION_CONFIG = {
@@ -91,52 +92,59 @@ function DiffViewer({ ancien, nouveau }) {
   );
 }
 
+const PAGE_SIZE = 25;
+
 // ── Main Historique component ─────────────────────────────
 export default function Historique() {
   const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ total: 0, inserts: 0, updates: 0, deletes: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterAction, setFilterAction] = useState('');
   const [filterTable, setFilterTable] = useState('');
   const [expanded, setExpanded] = useState(null);
-  const [page, setPage] = useState(0);
-  const PER_PAGE = 20;
+  const [page, setPage] = useState(1);
 
-  useEffect(() => { loadLogs(); }, []);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // ── Load audit logs ──
-  async function loadLogs() {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
+    const from = (page - 1) * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
+
+    let q = supabase
+      .from('historique')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (filterAction) q = q.eq('action', filterAction);
+    if (filterTable)  q = q.eq('table_name', filterTable);
+    if (search)       q = q.or(`user_email.ilike.%${search}%,table_name.ilike.%${search}%`);
+
+    q = q.range(from, to);
+    const { data, count } = await q;
+    setLogs(data || []);
+    setTotal(count || 0);
+    setLoading(false);
+  }, [page, search, filterAction, filterTable]);
+
+  // Load stats separately (counts all records, no filter)
+  const loadStats = useCallback(async () => {
     const { data } = await supabase
       .from('historique')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    setLogs(data || []);
-    setLoading(false);
-  }
+      .select('action');
+    const all = data || [];
+    setStats({
+      total:   all.length,
+      inserts: all.filter(l => l.action === 'INSERT').length,
+      updates: all.filter(l => l.action === 'UPDATE').length,
+      deletes: all.filter(l => l.action === 'DELETE').length,
+    });
+  }, []);
 
-  // ── Filter logs ──
-  const filtered = logs.filter(l => {
-    if (filterAction && l.action !== filterAction) return false;
-    if (filterTable && l.table_name !== filterTable) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      const email = (l.user_email || '').toLowerCase();
-      const table = (l.table_name || '').toLowerCase();
-      if (!email.includes(s) && !table.includes(s)) return false;
-    }
-    return true;
-  });
-
-  // ── Pagination ──
-  const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-
-  // ── Stats ──
-  const inserts = logs.filter(l => l.action === 'INSERT').length;
-  const updates = logs.filter(l => l.action === 'UPDATE').length;
-  const deletes = logs.filter(l => l.action === 'DELETE').length;
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadLogs(); }, [loadLogs]);
 
   return (
     <div>
@@ -147,10 +155,10 @@ export default function Historique() {
         gap: 16, marginBottom: 24,
       }}>
         {[
-          { label: 'Total actions',  value: logs.length, color: '#E8920A', icon: History },
-          { label: 'Ajouts',         value: inserts,     color: '#16A34A', icon: UserPlus },
-          { label: 'Modifications',  value: updates,     color: '#E8920A', icon: Pencil },
-          { label: 'Suppressions',   value: deletes,     color: '#DC2626', icon: Trash2 },
+          { label: 'Total actions',  value: stats.total,   color: '#E8920A', icon: History },
+          { label: 'Ajouts',         value: stats.inserts, color: '#16A34A', icon: UserPlus },
+          { label: 'Modifications',  value: stats.updates, color: '#E8920A', icon: Pencil },
+          { label: 'Suppressions',   value: stats.deletes, color: '#DC2626', icon: Trash2 },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -186,7 +194,7 @@ export default function Historique() {
                 className="search-input"
                 placeholder="Rechercher..."
                 value={search}
-                onChange={e => { setSearch(e.target.value); setPage(0); }}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
                 style={{ paddingLeft: 32, width: 180, fontSize: 12 }}
               />
             </div>
@@ -195,7 +203,7 @@ export default function Historique() {
             <select
               className="filter-select"
               value={filterAction}
-              onChange={e => { setFilterAction(e.target.value); setPage(0); }}
+              onChange={e => { setFilterAction(e.target.value); setPage(1); }}
               style={{ fontSize: 12 }}
             >
               <option value="">Toutes les actions</option>
@@ -208,7 +216,7 @@ export default function Historique() {
             <select
               className="filter-select"
               value={filterTable}
-              onChange={e => { setFilterTable(e.target.value); setPage(0); }}
+              onChange={e => { setFilterTable(e.target.value); setPage(1); }}
               style={{ fontSize: 12 }}
             >
               <option value="">Toutes les tables</option>
@@ -218,7 +226,7 @@ export default function Historique() {
             </select>
 
             {/* Refresh */}
-            <button className="btn btn-secondary btn-sm" onClick={loadLogs}>
+            <button className="btn btn-secondary btn-sm" onClick={() => { loadLogs(); loadStats(); }}>
               <RefreshCw size={13} />
             </button>
           </div>
@@ -228,7 +236,7 @@ export default function Historique() {
           <div style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
             Chargement...
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
             <History size={40} color="#D4D4D4" strokeWidth={1.5} style={{ margin: '0 auto 12px', display: 'block' }} />
             <p style={{ fontSize: 14, fontWeight: 600, color: '#737373' }}>Aucune action enregistrée</p>
@@ -248,7 +256,7 @@ export default function Historique() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.map(log => {
+                  {logs.map(log => {
                     const action = ACTION_CONFIG[log.action] || { label: log.action, color: '#737373', bg: '#F5F5F5', icon: FileText };
                     const table  = TABLE_CONFIG[log.table_name] || { label: log.table_name, icon: FileText };
                     const ActionIcon = action.icon;
@@ -344,32 +352,15 @@ export default function Historique() {
             </div>
 
             {/* ── Pagination ── */}
-            {totalPages > 1 && (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 20px', borderTop: '1px solid #F0F0F0',
-              }}>
-                <span style={{ fontSize: 12, color: '#A3A3A3' }}>
-                  {filtered.length} résultat(s) — Page {page + 1} / {totalPages}
-                </span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                  >
-                    ← Précédent
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={page >= totalPages - 1}
-                  >
-                    Suivant →
-                  </button>
-                </div>
-              </div>
-            )}
+            <div style={{ padding: '0 20px' }}>
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                pageSize={PAGE_SIZE}
+                onPageChange={p => setPage(p)}
+              />
+            </div>
           </>
         )}
       </div>

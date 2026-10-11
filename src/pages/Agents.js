@@ -1,7 +1,8 @@
 // Agents.js - HR agents management page
 // Features: search, filters, add/edit/delete, document generation, Excel import/export
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import Pagination from '../components/Pagination';
 import { supabase } from '../lib/supabase';
 import { age, formatDate, joursRestants } from '../lib/helpers';
 import { peutFaire } from '../lib/useProfil';
@@ -81,10 +82,13 @@ function FormSection({ title }) {
 }
 
 // ── Main Agents component ─────────────────────────────────
+const PAGE_SIZE = 25;
+
 export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, profil }) {
   const [filters, setFilters] = useState({
     search: '', type: '', poste: '', categorie: '', age: '',
   });
+  const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [modal, setModal] = useState(false);
   const [editAgent, setEditAgent] = useState(null);
@@ -100,7 +104,7 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
   const cats   = [...new Set(agents.map(a => a.categorie_socioprofessionnelle).filter(Boolean))].sort();
 
   // ── Filter agents ──
-  const filtered = agents.filter(a => {
+  const filtered = useMemo(() => agents.filter(a => {
     const name = `${a.prenom} ${a.nom} ${a.matricule || ''}`.toLowerCase();
     if (filters.search && !name.includes(filters.search.toLowerCase())) return false;
     if (filters.type && a.type_contrat !== filters.type) return false;
@@ -114,7 +118,10 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
       if (filters.age === '>50'   && a_ <= 50)              return false;
     }
     return true;
-  });
+  }), [agents, filters]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ── Open add modal ──
   function openAdd() {
@@ -216,12 +223,14 @@ export default function Agents({ agents, onRefresh, entreprise, onOpenFiche, pro
     setDeleting(false);
   }
 
-  // ── Toggle select all (filtered agents) ──
+  // ── Toggle select all (current page) ──
   function toggleSelectAll() {
-    if (selected.size === filtered.length && filtered.length > 0) {
-      setSelected(new Set());
+    const pageIds = paginated.map(a => a.id);
+    const allSelected = pageIds.every(id => selected.has(id));
+    if (allSelected && pageIds.length > 0) {
+      setSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.delete(id)); return next; });
     } else {
-      setSelected(new Set(filtered.map(a => a.id)));
+      setSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.add(id)); return next; });
     }
   }
 
@@ -470,7 +479,7 @@ function importExcel(file) {
             className="search-input"
             placeholder="Rechercher un agent..."
             value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            onChange={e => { setFilters(f => ({ ...f, search: e.target.value })); setPage(1); }}
             style={{ paddingLeft: 36, width: '100%' }}
           />
         </div>
@@ -547,7 +556,7 @@ function importExcel(file) {
           <select
             className="filter-select"
             value={filters.type}
-            onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
+            onChange={e => { setFilters(f => ({ ...f, type: e.target.value })); setPage(1); }}
           >
             <option value="">Tous les contrats</option>
             <option value="CDI">CDI</option>
@@ -559,7 +568,7 @@ function importExcel(file) {
           <select
             className="filter-select"
             value={filters.poste}
-            onChange={e => setFilters(f => ({ ...f, poste: e.target.value }))}
+            onChange={e => { setFilters(f => ({ ...f, poste: e.target.value })); setPage(1); }}
           >
             <option value="">Tous les postes</option>
             {postes.map(p => <option key={p} value={p}>{p}</option>)}
@@ -568,7 +577,7 @@ function importExcel(file) {
           <select
             className="filter-select"
             value={filters.categorie}
-            onChange={e => setFilters(f => ({ ...f, categorie: e.target.value }))}
+            onChange={e => { setFilters(f => ({ ...f, categorie: e.target.value })); setPage(1); }}
           >
             <option value="">Toutes catégories</option>
             {cats.map(c => <option key={c} value={c}>{c}</option>)}
@@ -577,7 +586,7 @@ function importExcel(file) {
           <select
             className="filter-select"
             value={filters.age}
-            onChange={e => setFilters(f => ({ ...f, age: e.target.value }))}
+            onChange={e => { setFilters(f => ({ ...f, age: e.target.value })); setPage(1); }}
           >
             <option value="">Tous les âges</option>
             <option value="<30">Moins de 30 ans</option>
@@ -623,8 +632,8 @@ function importExcel(file) {
                 <th style={{ width: 36 }}>
                   <input
                     type="checkbox"
-                    checked={filtered.length > 0 && selected.size === filtered.length}
-                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
+                    checked={paginated.length > 0 && paginated.every(a => selected.has(a.id))}
+                    ref={el => { if (el) el.indeterminate = paginated.some(a => selected.has(a.id)) && !paginated.every(a => selected.has(a.id)); }}
                     onChange={toggleSelectAll}
                     style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#E8920A' }}
                     title="Tout sélectionner"
@@ -643,16 +652,17 @@ function importExcel(file) {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {paginated.length === 0 ? (
                 <tr>
                   <td colSpan="10" style={{ textAlign: 'center', padding: 48, color: '#A3A3A3' }}>
                     Aucun agent trouvé
                   </td>
                 </tr>
-              ) : filtered.map((a, idx) => {
+              ) : paginated.map((a, idx) => {
                 const jours = joursRestants(a.date_fin_contrat);
                 const isExpiring = a.type_contrat === 'CDD' && jours !== null && jours <= 30 && jours >= 0;
                 const isSelected = selected.has(a.id);
+                const globalIdx = (page - 1) * PAGE_SIZE + idx + 1;
                 return (
                   <tr key={a.id} style={{ background: isSelected ? '#FFF8F0' : undefined }}>
                     <td style={{ width: 36 }}>
@@ -664,7 +674,7 @@ function importExcel(file) {
                       />
                     </td>
                     <td style={{ textAlign: 'center', color: '#A3A3A3', fontSize: 12, fontWeight: 500, width: 36 }}>
-                      {idx + 1}
+                      {globalIdx}
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -760,6 +770,17 @@ function importExcel(file) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* ── Pagination ── */}
+        <div style={{ padding: '0 20px' }}>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       </div>
 
